@@ -286,7 +286,7 @@
                 <span class="settings-label">雲端帳號狀態</span>
                 <div id="sidebar-auth-status" style="font-size: 14px; color: var(--text-main); margin-bottom: 8px; font-weight: 600;">檢查狀態中...</div>
                 <button id="sidebar-google-logout-btn" class="google-btn" onclick="signOutGoogle()" style="display: none; background-color: #fff5f5; color: #ff5b5b; border-color: #ff5b5b;">
-                    登出雲端帳號
+                    登出並清除本地快取
                 </button>
             </div>
         </div>
@@ -472,7 +472,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
+        import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -488,18 +488,32 @@
         const db = getDatabase(app);
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
-        const recordsRef = ref(db, 'records');
 
+        // 使用 signInWithRedirect 解決手機版與 PWA 重複要求登入的問題，並設定永久本地保存
         window.signInWithGoogle = function() {
             document.getElementById('login-error-msg').style.display = 'none';
-            signInWithPopup(auth, provider).catch(err => {
+            setPersistence(auth, browserLocalPersistence).then(() => {
+                return signInWithRedirect(auth, provider);
+            }).catch(err => {
                 console.log(err);
                 document.getElementById('login-error-msg').style.display = 'block';
+                document.getElementById('login-error-msg').innerText = "系統錯誤，請稍後再試。";
             });
         };
 
+        // 捕捉 Redirect 回傳的錯誤
+        getRedirectResult(auth).catch((error) => {
+            console.error("Redirect login error", error);
+            document.getElementById('login-error-msg').style.display = 'block';
+            document.getElementById('login-error-msg').innerText = "登入失敗：" + error.message;
+        });
+
         window.signOutGoogle = function() {
-            signOut(auth).then(() => location.reload());
+            signOut(auth).then(() => {
+                // 登出時清空本地快取，保護隱私
+                localStorage.removeItem('local_records');
+                location.reload();
+            });
         };
 
         // 監聽登入狀態：控制全螢幕登入畫面的顯示與隱藏
@@ -509,7 +523,7 @@
             const logoutBtn = document.getElementById('sidebar-google-logout-btn');
 
             if (user) {
-                // 已登入：隱藏登入屏，顯示主畫面並拉取資料
+                // 已登入：隱藏登入屏，顯示主畫面並拉取專屬資料
                 loginScreen.style.display = 'none';
                 statusText.innerText = `已登入: ${user.email}`;
                 logoutBtn.style.display = 'flex';
@@ -527,14 +541,22 @@
         });
 
         function startDatabaseSync() {
-            onValue(recordsRef, (snapshot) => {
+            // 優化：取得個人專屬資料夾，避免共用 records 導致資料覆寫或權限阻擋而遺失
+            const uid = auth.currentUser.uid;
+            const userRecordsRef = ref(db, `users/${uid}/records`);
+            
+            onValue(userRecordsRef, (snapshot) => {
                 const data = snapshot.val();
                 let parsedRecords = [];
                 if (data) {
                     parsedRecords = Array.isArray(data) ? data : Object.values(data);
                     parsedRecords = parsedRecords.filter(r => r !== null);
                 }
+                
+                // 更新全域變數與本地快取
                 window.records = parsedRecords;
+                localStorage.setItem('local_records', JSON.stringify(parsedRecords));
+                
                 if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
                 if (document.getElementById('calendarModal') && document.getElementById('calendarModal').classList.contains('active')) {
                     if (typeof window.renderGridCalendar === 'function') window.renderGridCalendar();
@@ -542,17 +564,20 @@
                 }
             }, (error) => {
                 if (error.code === 'PERMISSION_DENIED') {
-                    document.getElementById('sidebar-auth-status').innerText = '帳號驗證失敗';
-                    document.getElementById('auth-error-msg').style.display = 'block';
-                    signOut(auth);
+                    document.getElementById('sidebar-auth-status').innerText = '資料庫權限不足';
                 }
             });
         }
 
         window.saveToFirebase = function(recordsArray) {
-            set(recordsRef, recordsArray).catch(error => {
+            if (!auth.currentUser) return;
+            const uid = auth.currentUser.uid;
+            const userRecordsRef = ref(db, `users/${uid}/records`);
+            
+            set(userRecordsRef, recordsArray).catch(error => {
+                console.error("寫入雲端失敗：", error);
                 if(error.code === 'PERMISSION_DENIED') {
-                    alert("您沒有權限修改資料，請確認是否在白名單內。");
+                    alert("您沒有權限修改資料庫，請聯絡管理員。");
                 }
             });
         };
@@ -587,15 +612,17 @@
             '👗','👔','👟','💄','🧴','🏋️','⚽','🚴','✈️','🚄','🏝️','⛺'
         ];
 
-        var records = [];
+        // 啟動時立刻讀取 LocalStorage 快取資料，達成離線也能秒開且不遺失資料
+        var records = JSON.parse(localStorage.getItem('local_records')) || [];
+        
         let viewMode = 'month'; 
-        let currentSelectedYear = 2026;
-        let currentSelectedMonth = 5; 
+        let currentSelectedYear = new Date().getFullYear();
+        let currentSelectedMonth = new Date().getMonth(); 
         let selectedCustomIconModal = '🎨';
         let selectedCustomIconRecord = '🎨';
         let pendingDeleteId = null; 
-        let displayYear, displayMonth; 
-        let selectedDateStr = '2026-06-09'; 
+        let displayYear = new Date().getFullYear(), displayMonth = new Date().getMonth(); 
+        let selectedDateStr = new Date().toISOString().split('T')[0]; 
         let animationProgress = 0;
         let chartAnimationFrameId = null;
         let recordState = { mode: 'add', id: null, type: 'expense', category: '', date: new Date(), expression: '', amount: 0, diary: '' };
@@ -927,13 +954,39 @@
         function executeDeleteRecord() {
             if (pendingDeleteId) {
                 records = records.filter(r => r.id !== pendingDeleteId);
+                
+                // 更新 LocalStorage 與 Firebase
+                localStorage.setItem('local_records', JSON.stringify(records));
                 if (window.saveToFirebase) window.saveToFirebase(records);
+                
                 closeDeleteModal(); closeRecordModal();
                 syncHeaderDisplay();
             }
         }
 
-        function openCalendarModal() { displayYear = currentSelectedYear; displayMonth = currentSelectedMonth; document.getElementById('calendarModal').classList.add('active'); renderGridCalendar(); renderModalDateRecords(); }
+        function openCalendarModal() { 
+            // 每次打開日曆都強制回到「今日」
+            const today = new Date();
+            displayYear = today.getFullYear(); 
+            displayMonth = today.getMonth(); 
+            
+            const yearStr = today.getFullYear();
+            const monthStr = String(today.getMonth() + 1).padStart(2, '0');
+            const dayStr = String(today.getDate()).padStart(2, '0');
+            selectedDateStr = `${yearStr}-${monthStr}-${dayStr}`;
+            
+            currentSelectedYear = displayYear;
+            currentSelectedMonth = displayMonth;
+            viewMode = 'month';
+            syncHeaderDisplay();
+
+            document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
+            document.getElementById('selected-date-label').innerText = `📍 選定日期：${selectedDateStr}`;
+            document.getElementById('calendarModal').classList.add('active'); 
+            renderGridCalendar(); 
+            renderModalDateRecords(); 
+        }
+
         function closeCalendarModal(e) { if (e === null || e.target === document.getElementById('calendarModal')) document.getElementById('calendarModal').classList.remove('active'); }
         function adjustCalendarMonth(delta) { displayMonth += delta; if (displayMonth < 0) { displayMonth = 11; displayYear--; } if (displayMonth > 11) { displayMonth = 0; displayYear++; } renderGridCalendar(); }
 
@@ -996,7 +1049,11 @@
         function executeAdd(amount, category, date, diary, forcedType) {
             const newR = { id: Date.now(), type: forcedType, amount: amount, category: category, date: date, diary: diary };
             records.unshift(newR); 
+            
+            // 存入 LocalStorage 與 Firebase 雙向同步
+            localStorage.setItem('local_records', JSON.stringify(records));
             if (window.saveToFirebase) window.saveToFirebase(records);
+            
             const recordDate = new Date(date); currentSelectedYear = recordDate.getFullYear(); currentSelectedMonth = recordDate.getMonth();
             viewMode = 'month';
             syncHeaderDisplay();
@@ -1091,7 +1148,22 @@
         }
 
         function openAddModal() {
-            recordState.mode = 'add'; recordState.id = Date.now(); recordState.type = 'expense'; recordState.category = categories['expense'][0]; recordState.date = new Date(selectedDateStr || new Date().toISOString().split('T')[0]); recordState.expression = ''; recordState.amount = 0; recordState.diary = '';
+            // 每次打開新增都強制跳回「今日」
+            const today = new Date();
+            const yearStr = today.getFullYear();
+            const monthStr = String(today.getMonth() + 1).padStart(2, '0');
+            const dayStr = String(today.getDate()).padStart(2, '0');
+            const todayStr = `${yearStr}-${monthStr}-${dayStr}`;
+
+            selectedDateStr = todayStr; // 同步確保曆法視圖也是今日
+            recordState.mode = 'add'; 
+            recordState.id = Date.now(); 
+            recordState.type = 'expense'; 
+            recordState.category = categories['expense'][0]; 
+            recordState.date = today; 
+            recordState.expression = ''; 
+            recordState.amount = 0; 
+            recordState.diary = '';
             selectedCustomIconRecord = '🎨';
             document.getElementById('record-modal-title').innerText = '新增帳目'; document.getElementById('record-delete-btn').style.display = 'none'; document.getElementById('record-amount').innerText = '0';
             
@@ -1222,7 +1294,11 @@
                     const index = records.findIndex(r => r.id === recordState.id);
                     if (index !== -1) {
                         records[index] = { id: recordState.id, type: recordState.type, amount: finalAmt, category: finalCat, date: dateStr, diary: newDiary };
+                        
+                        // 更新 LocalStorage 與 Firebase
+                        localStorage.setItem('local_records', JSON.stringify(records));
                         if (window.saveToFirebase) window.saveToFirebase(records);
+                        
                         currentSelectedYear = year; currentSelectedMonth = recordState.date.getMonth(); viewMode = 'month';
                         syncHeaderDisplay();
                     }
