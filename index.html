@@ -42,8 +42,7 @@
         .google-btn img { width: 24px; height: 24px; }
         [data-theme="dark"] .google-btn { background-color: #333; color: #fff; border-color: #555; }
         
-        .user-profile-badge { font-size: 12px; color: var(--text-sub); margin-right: 8px; display: flex; align-items: center; gap: 6px; cursor: pointer;}
-        .user-profile-badge img { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border-color); }
+        .user-profile-badge { font-size: 14px; color: var(--text-sub); margin-right: 8px; display: flex; align-items: center; gap: 6px; cursor: pointer;}
 
         /* --- 頂部導覽列功能鈕 --- */
         .top-action-bar { flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 12px 20px; background: var(--card-bg); border-bottom: 1px solid var(--border-color); }
@@ -67,7 +66,8 @@
 
         /* --- 歷史明細容器區 --- */
         .container { flex: 1; padding: 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
-        .history-container { min-height: calc(100% + 1px); } /* 確保即使空白也能觸發滑動回彈 */
+        /* 預設伸延到電話屏幕下方，即使數據很少也能滑動以收起瀏覽器工具列 */
+        .history-container { min-height: calc(100% + 150px); padding-bottom: 150px; } 
         .empty-state-wrapper { display: flex; flex-direction: column; align-items: center; padding-top: 60px; color: var(--text-sub); }
         .empty-text-main { font-size: 15px; color: #8e8e93; font-weight: 500; }
         
@@ -114,7 +114,7 @@
 
         .calendar-sheet { height: 100%; max-height: 100% !important; border-radius: 0 !important; display: flex; flex-direction: column; border-top: none !important; background: var(--card-bg); padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: 0 !important; overflow: hidden !important; animation: none !important; }
         #modal-date-records { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: max(40px, env(safe-area-inset-bottom) + 20px); }
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; text-align: center; margin-bottom: 16px; padding: 12px; background: var(--input-bg); border-radius: var(--radius-main); border: 1.5px solid var(--border-color); }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; text-align: center; padding: 12px; background: var(--input-bg); border-radius: var(--radius-main); border: 1.5px solid var(--border-color); box-sizing: border-box; }
         .cal-week-title { font-size: 13px; font-weight: 800; color: var(--text-sub); padding: 4px 0; }
         .cal-day { font-size: 15px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; justify-content: center; position: relative; aspect-ratio: 1; margin: 0 auto; width: 38px; height: 38px; border-radius: 50%; }
         .cal-day.blur-day { color: #ccc !important; opacity: 0.4; }
@@ -207,8 +207,7 @@
         
         <div style="display: flex; align-items: center; gap: 8px;">
             <div class="user-profile-badge" id="user-profile-badge" style="display: none;" onclick="signOutGoogle()">
-                <img id="user-avatar" src="" alt="User">
-                <span id="user-name">登出</span>
+                <span id="user-name" style="font-weight: bold; background: var(--nav-btn-bg); padding: 6px 14px; border-radius: 16px; color: var(--text-main);">登出</span>
             </div>
             <button class="nav-btn" style="background: var(--primary-color); color: #fff; font-size: 16px; padding: 0 14px;" onclick="openCalendarModal()">📅</button>
         </div>
@@ -247,7 +246,13 @@
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v9h9"></path><circle cx="12" cy="12" r="3.5" fill="var(--card-bg)" stroke="currentColor"></circle></svg>
                 </button>
             </div>
-            <div class="calendar-grid" id="calendar-grid-container"></div>
+            
+            <div id="cal-swipe-viewport" style="position: relative; width: 100%; overflow: hidden; margin-bottom: 16px; touch-action: pan-y;">
+                <div id="cal-swipe-track" style="position: relative; width: 100%; will-change: transform; display: flex;">
+                    <div class="calendar-grid" id="calendar-grid-container" style="width: 100%; flex-shrink: 0;"></div>
+                </div>
+            </div>
+
             <div style="font-size: 14px; font-weight: 800; margin-bottom: 8px; color:var(--text-main);" id="selected-date-label">📍 選定日期</div>
             <div id="modal-date-records"></div>
         </div>
@@ -391,7 +396,7 @@
             if (user) {
                 authScreen.classList.add('hidden');
                 userBadge.style.display = 'flex';
-                document.getElementById('user-avatar').src = user.photoURL || '';
+                // 已移除顯示 Google 頭像的功能
                 startDatabaseSync();
             } else {
                 authScreen.classList.remove('hidden');
@@ -492,6 +497,18 @@
             initCoinLoop();
             initDragHandle();
             initChartSwipe();
+            initCalendarSwipe();
+            
+            // 綁定日曆格子的點擊事件
+            document.getElementById('cal-swipe-track').addEventListener('click', function(e) {
+                const cell = e.target.closest('.cal-day');
+                if (cell && !cell.classList.contains('cal-week-title')) {
+                    selectedDateStr = cell.getAttribute('data-date');
+                    document.getElementById('selected-date-label').innerText = `📍 選定日期：${selectedDateStr}`;
+                    renderGridCalendar();
+                    renderModalDateRecords();
+                }
+            });
         };
 
         function syncHeaderDisplay() {
@@ -612,6 +629,66 @@
             }
         }
 
+        /* --- 實作日曆手勢滑動功能 --- */
+        function initCalendarSwipe() {
+            const swipeArea = document.getElementById('cal-swipe-viewport');
+            const swipeTarget = document.getElementById('cal-swipe-track');
+            let touchStartX = 0; let currentTouchX = 0; let isSwiping = false; let hasAddedGhosts = false;
+
+            swipeArea.addEventListener('touchstart', (e) => {
+                if (e.touches.length > 1) return;
+                touchStartX = e.touches[0].clientX; currentTouchX = touchStartX; isSwiping = true; hasAddedGhosts = false;
+                swipeTarget.style.transition = 'none';
+                document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
+            }, {passive: true});
+
+            swipeArea.addEventListener('touchmove', (e) => {
+                if (!isSwiping) return;
+                currentTouchX = e.touches[0].clientX; let deltaX = currentTouchX - touchStartX;
+                
+                if (!hasAddedGhosts && Math.abs(deltaX) > 5) {
+                    hasAddedGhosts = true;
+                    let pY = displayYear; let pM = displayMonth - 1; if (pM < 0) { pM = 11; pY--; }
+                    swipeTarget.appendChild(createGhostCal(pY, pM, true));
+                    let nY = displayYear; let nM = displayMonth + 1; if (nM > 11) { nM = 0; nY++; }
+                    swipeTarget.appendChild(createGhostCal(nY, nM, false));
+                }
+                swipeTarget.style.transform = `translateX(${deltaX}px)`;
+            }, {passive: true});
+
+            swipeArea.addEventListener('touchend', (e) => {
+                if (!isSwiping) return;
+                isSwiping = false; let deltaX = currentTouchX - touchStartX; const threshold = swipeArea.offsetWidth * 0.2;
+                let direction = 0;
+                if (deltaX > threshold) { direction = -1; } else if (deltaX < -threshold) { direction = 1; }
+                
+                if (direction !== 0) {
+                    let targetTransformX = direction === 1 ? -(swipeArea.offsetWidth + 20) : (swipeArea.offsetWidth + 20);
+                    swipeTarget.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                    swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
+                    setTimeout(() => {
+                        adjustCalendarMonth(direction);
+                        document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
+                        swipeTarget.style.transition = 'none';
+                        swipeTarget.style.transform = `translateX(0)`;
+                    }, 300);
+                } else {
+                    swipeTarget.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                    swipeTarget.style.transform = `translateX(0)`;
+                    setTimeout(() => { document.querySelectorAll('.ghost-cal').forEach(el => el.remove()); }, 300);
+                }
+            });
+        }
+
+        function createGhostCal(y, m, isPrev) {
+            const ghost = document.createElement('div');
+            ghost.className = 'calendar-grid ghost-cal';
+            ghost.style.position = 'absolute'; ghost.style.top = '0'; ghost.style.width = '100%';
+            ghost.style.left = isPrev ? 'calc(-100% - 20px)' : 'calc(100% + 20px)';
+            ghost.innerHTML = generateCalendarHTML(y, m);
+            return ghost;
+        }
+
         function updateDashboard() {
             let totalIncome = 0; let totalExpense = 0; const prefix = `${currentSelectedYear}-${(currentSelectedMonth + 1).toString().padStart(2, '0')}`;
             records.forEach(r => { if (viewMode === 'month' && !r.date.startsWith(prefix)) return; if (r.type === 'income') totalIncome += r.amount; else totalExpense += r.amount; });
@@ -730,30 +807,36 @@
         function closeCalendarModal(e) { if (e === null || e.target === document.getElementById('calendarModal')) document.getElementById('calendarModal').classList.remove('active'); }
         function adjustCalendarMonth(delta) { displayMonth += delta; if (displayMonth < 0) { displayMonth = 11; displayYear--; } if (displayMonth > 11) { displayMonth = 0; displayYear++; } renderGridCalendar(); }
 
-        function renderGridCalendar() {
-            document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
-            const gridContainer = document.getElementById('calendar-grid-container'); gridContainer.innerHTML = '';
+        /* --- 產生單一月份日曆的 HTML 字串 --- */
+        function generateCalendarHTML(year, month) {
+            let html = '';
             const weeks = ['一', '二', '三', '四', '五', '六', '日'];
-            weeks.forEach(w => { const el = document.createElement('div'); el.className = 'cal-week-title'; el.innerText = w; gridContainer.appendChild(el); });
+            weeks.forEach(w => { html += `<div class="cal-week-title">${w}</div>`; });
 
-            const firstDay = new Date(displayYear, displayMonth, 1); let firstDayOfWeek = firstDay.getDay(); firstDayOfWeek = (firstDayOfWeek === 0) ? 6 : firstDayOfWeek - 1;
-            const prevLastDate = new Date(displayYear, displayMonth, 0).getDate();
-            for (let i = firstDayOfWeek - 1; i >= 0; i--) { createDayCell(displayMonth === 0 ? displayYear - 1 : displayYear, displayMonth === 0 ? 11 : displayMonth - 1, prevLastDate - i, true, gridContainer); }
-            const currLastDate = new Date(displayYear, displayMonth + 1, 0).getDate();
-            for (let d = 1; d <= currLastDate; d++) { createDayCell(displayYear, displayMonth, d, false, gridContainer); }
+            const firstDay = new Date(year, month, 1); let firstDayOfWeek = firstDay.getDay(); firstDayOfWeek = (firstDayOfWeek === 0) ? 6 : firstDayOfWeek - 1;
+            const prevLastDate = new Date(year, month, 0).getDate();
+            for (let i = firstDayOfWeek - 1; i >= 0; i--) { html += buildDayCellHTML(month === 0 ? year - 1 : year, month === 0 ? 11 : month - 1, prevLastDate - i, true); }
+            const currLastDate = new Date(year, month + 1, 0).getDate();
+            for (let d = 1; d <= currLastDate; d++) { html += buildDayCellHTML(year, month, d, false); }
             const totalCells = firstDayOfWeek + currLastDate; const remaining = (7 - (totalCells % 7)) % 7;
-            for (let nextD = 1; nextD <= remaining; nextD++) { createDayCell(displayMonth === 11 ? displayYear + 1 : displayYear, displayMonth === 11 ? 0 : displayMonth + 1, nextD, true, gridContainer); }
+            for (let nextD = 1; nextD <= remaining; nextD++) { html += buildDayCellHTML(month === 11 ? year + 1 : year, month === 11 ? 0 : month + 1, nextD, true); }
+            return html;
         }
 
-        function createDayCell(year, month, day, isBlur, container) {
+        function buildDayCellHTML(year, month, day, isBlur) {
             const cellDateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-            const cell = document.createElement('div'); cell.className = 'cal-day'; cell.innerText = day;
-            if (isBlur) cell.classList.add('blur-day');
-            if (cellDateStr === new Date().toISOString().split('T')[0]) cell.classList.add('today-circle');
-            if (cellDateStr === selectedDateStr) { cell.classList.remove('today-circle'); cell.classList.add('selected-circle'); }
-            if (records.some(r => r.date === cellDateStr)) { const dot = document.createElement('div'); dot.className = 'day-dot'; cell.appendChild(dot); }
-            cell.onclick = function() { selectedDateStr = cellDateStr; document.getElementById('selected-date-label').innerText = `📍 選定日期：${selectedDateStr}`; renderGridCalendar(); renderModalDateRecords(); };
-            container.appendChild(cell);
+            let cls = 'cal-day';
+            if (isBlur) cls += ' blur-day';
+            if (cellDateStr === new Date().toISOString().split('T')[0]) cls += ' today-circle';
+            if (cellDateStr === selectedDateStr) cls += ' selected-circle';
+            let dot = records.some(r => r.date === cellDateStr) ? '<div class="day-dot"></div>' : '';
+            return `<div class="${cls}" data-date="${cellDateStr}">${day}${dot}</div>`;
+        }
+
+        function renderGridCalendar() {
+            document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
+            const gridContainer = document.getElementById('calendar-grid-container');
+            gridContainer.innerHTML = generateCalendarHTML(displayYear, displayMonth);
         }
 
         function renderModalDateRecords() {
