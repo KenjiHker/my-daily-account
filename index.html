@@ -15,6 +15,7 @@
         /* --- 基礎變數與 Apple 雙主題風格 --- */
         html { 
             background-color: var(--bg-color); 
+            /* 解決底部未延伸問題：棄用 bottom: 0，改用絕對尺寸 */
             width: 100vw; 
             height: 100dvh; 
             overflow: hidden; 
@@ -52,7 +53,7 @@
             position: fixed;
             top: 0; left: 0; 
             width: 100vw; 
-            height: 100dvh; 
+            height: 100dvh; /* 強制覆蓋全高 */
             overflow: hidden; 
             overscroll-behavior-y: none;
         }
@@ -73,7 +74,7 @@
         .triangle-down { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--text-main); display: inline-block; }
         .nav-btn { background: var(--nav-btn-bg); border: none; padding: 0 12px; border-radius: 20px; font-size: 13px; font-weight: bold; color: var(--nav-btn-text); display: flex; align-items: center; justify-content: center; min-height: 38px; }
 
-        /* --- 設定側邊欄 --- */
+        /* --- 設定側邊欄 (動畫放慢至 0.5s，依然保持 GPU 加速) --- */
         .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: rgba(0,0,0,0.5); z-index: 9998; opacity: 0; pointer-events: none; transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: opacity; }
         .sidebar-overlay.active { opacity: 1; pointer-events: auto; }
         
@@ -130,7 +131,7 @@
         .list-action-delete-btn { background: #fff5f5; color: #ff5b5b; border: 1.5px solid #ff5b5b; font-size: 12px; font-weight: bold; padding: 6px 12px; border-radius: 8px; min-height: 32px; display: flex; align-items: center; justify-content: center; }
         [data-theme="dark"] .list-action-delete-btn { background: #2c1919; color: #ff8787; border-color: #ff8787; }
 
-        /* --- 彈窗與計算機 --- */
+        /* --- 彈窗與計算機 (放慢動畫) --- */
         .month-grid-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 8px 4px; }
         .month-cell-btn { height: 54px; border: 2px solid var(--border-color); background: var(--card-bg); border-radius: var(--radius-sub); font-size: 15px; font-weight: bold; color: var(--text-main); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }
         .month-cell-btn.active { background: var(--primary-color); border-color: var(--primary-color); color: #ffffff; box-shadow: 0 4px 12px rgba(74, 179, 227, 0.25); }
@@ -143,6 +144,7 @@
         .action-cancel-block-btn { flex: 1; height: 50px; background: var(--nav-btn-bg); color: var(--text-main); border: 2.5px solid #222222; border-radius: var(--radius-sub); font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 #222222; }
         [data-theme="dark"] .action-cancel-block-btn { border-color: #ffffff; box-shadow: 0 4px 0 #ffffff; }
 
+        /* 完全佔滿螢幕的日曆視窗，100dvh 直接貼近底部邊緣 */
         .calendar-sheet { height: 100dvh !important; max-height: 100dvh !important; border-radius: 0 !important; display: flex; flex-direction: column; border-top: none !important; background: var(--card-bg); padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: 0 !important; overflow: hidden !important; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1) !important; will-change: transform; }
         
         #modal-date-records { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
@@ -154,6 +156,7 @@
         .cal-day.selected-circle { background-color: var(--text-main); color: var(--card-bg) !important; font-weight: bold; }
         .day-dot { position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 5px; height: 5px; background-color: #ff5b5b; border-radius: 50%; }
 
+        /* 確保彈窗背景完全固定，不再用 bottom 0 */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: rgba(0,0,0,0.5); z-index: 2000; display: none; align-items: flex-end; transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: opacity; }
         .modal-overlay.active { display: flex; opacity: 1; }
         
@@ -187,6 +190,7 @@
         .handdrawn-font-svg { width: 100%; height: 100%; display: block; }
         .handdrawn-font-svg path { fill: none; stroke: var(--calc-text); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
 
+        /* 新增紀錄視窗：移除 bottom 0 改為 100dvh */
         .full-screen-modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: var(--bg-color); z-index: 3000; display: none; flex-direction: column; overflow: hidden; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: transform; }
         .full-screen-modal.active { display: flex; }
         .record-header-bar { display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 12px; background: var(--card-bg); border-bottom: 1px solid var(--border-color); font-size: 18px; font-weight: bold; color: var(--text-main); z-index: 10; }
@@ -198,6 +202,7 @@
         .record-cat-item.active .record-cat-icon { border-color: var(--primary-color); background: #eef7fc; transform: scale(1.1); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         [data-theme="dark"] .record-cat-item.active .record-cat-icon { background: #233540; }
 
+        /* 計算機區域：確保高度能夠貼合底部並包含 Safe Area */
         .record-bottom-calc-area { position: absolute; bottom: 0; left: 0; width: 100vw; height: calc(52% + env(safe-area-inset-bottom)); background: var(--calc-bg); border-top: 3px solid var(--primary-color); border-top-left-radius: 28px; border-top-right-radius: 28px; padding-bottom: env(safe-area-inset-bottom); display: flex; flex-direction: column; transform: translateY(0); transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); box-shadow: 0 -4px 20px rgba(0,0,0,0.1); z-index: 100; will-change: transform; }
         .record-bottom-calc-area.collapsed { transform: translateY(calc(100% - 96px - env(safe-area-inset-bottom))); }
         .drawer-handle-wrap { width: 100%; height: 24px; display: flex; align-items: center; justify-content: center; cursor: grab; padding: 14px 0 6px 0; }
@@ -320,8 +325,8 @@
         </div>
     </div>
 
-    <div class="modal-overlay" id="emojiModal" onclick="closeEmojiModal()">
-        <div class="modal-sheet" style="z-index: 3100;" onclick="event.stopPropagation()">
+    <div class="modal-overlay" id="emojiModal" style="z-index: 4100;" onclick="closeEmojiModal()">
+        <div class="modal-sheet" onclick="event.stopPropagation()">
             <div class="modal-header">
                 <span style="font-size: 16px; font-weight: bold;">🎨 挑選您專屬項目的圖示</span>
                 <button class="modal-close" onclick="closeEmojiModal()">✕</button>
@@ -356,6 +361,11 @@
             </div>
             
             <div class="record-cat-grid" id="record-cat-grid"></div>
+            
+            <div id="custom-name-container" style="display: none; flex-direction: column; gap: 6px;">
+                <label style="font-size:13px; font-weight:bold; color:var(--text-sub);">分類名稱</label>
+                <input type="text" id="record-custom-name" class="input-ctrl" placeholder="請輸入自訂名稱...">
+            </div>
         </div>
 
         <div class="record-bottom-calc-area">
@@ -961,8 +971,16 @@
         function openEmojiPicker(source) { currentActiveIconSource = source; document.getElementById('emojiModal').classList.add('active'); }
         function closeEmojiModal() { document.getElementById('emojiModal').classList.remove('active'); }
         function selectEmoji(emoji) { 
-            if (currentActiveIconSource === 'modal') { selectedCustomIconModal = emoji; document.getElementById('custom-icon-preview-modal').innerText = emoji; } 
-            else if (currentActiveIconSource === 'record') { selectedCustomIconRecord = emoji; recordState.category = `${emoji} 其他`; renderRecordCategories(); }
+            if (currentActiveIconSource === 'modal') { 
+                selectedCustomIconModal = emoji; 
+                document.getElementById('custom-icon-preview-modal').innerText = emoji; 
+            } 
+            else if (currentActiveIconSource === 'record') { 
+                selectedCustomIconRecord = emoji; 
+                let customName = document.getElementById('record-custom-name').value.trim();
+                recordState.category = `${emoji} ${customName ? customName : '其他'}`; 
+                renderRecordCategories(); 
+            }
             closeEmojiModal(); 
         }
 
@@ -982,14 +1000,26 @@
 
         function openAddModal() {
             recordState.mode = 'add'; recordState.id = Date.now(); recordState.type = 'expense'; recordState.category = categories['expense'][0]; recordState.date = new Date(selectedDateStr || new Date().toISOString().split('T')[0]); recordState.expression = ''; recordState.amount = 0;
+            selectedCustomIconRecord = '🎨';
             document.getElementById('record-modal-title').innerText = '新增帳目'; document.getElementById('record-delete-btn').style.display = 'none'; document.getElementById('record-amount').innerText = '0';
+            document.getElementById('record-custom-name').value = '';
             setRecordType('expense', true); updateRecordDateDisplay(); toggleCalcDrawer('expand'); document.getElementById('recordModal').classList.add('active');
         }
 
         function openRecordModal(id) {
             const record = records.find(r => r.id === id); if (!record) return;
             recordState.mode = 'edit'; recordState.id = record.id; recordState.type = record.type; recordState.category = record.category; recordState.date = new Date(record.date); recordState.expression = ''; recordState.amount = record.amount;
-            if (recordState.category.includes('其他')) { selectedCustomIconRecord = recordState.category.split(' ')[0] || '🎨'; }
+            
+            const standardCats = categories[recordState.type].filter(c => !c.includes('其他'));
+            if (!standardCats.includes(recordState.category)) {
+                selectedCustomIconRecord = recordState.category.split(' ')[0] || '🎨';
+                let namePart = recordState.category.substring(selectedCustomIconRecord.length).trim();
+                if (namePart === '其他') namePart = '';
+                document.getElementById('record-custom-name').value = namePart;
+            } else {
+                document.getElementById('record-custom-name').value = '';
+            }
+            
             document.getElementById('record-modal-title').innerText = '修改帳目'; document.getElementById('record-delete-btn').style.display = 'block'; document.getElementById('record-amount').innerText = recordState.amount;
             setRecordType(recordState.type, false); updateRecordDateDisplay(); toggleCalcDrawer('expand'); document.getElementById('recordModal').classList.add('active');
         }
@@ -1003,14 +1033,44 @@
 
         function renderRecordCategories() {
             const grid = document.getElementById('record-cat-grid'); grid.innerHTML = '';
+            let isCustomMatchGlobal = false;
+            
             categories[recordState.type].forEach(cat => {
-                const isOther = cat.includes('其他'); let isMatch = false;
-                if (isOther && recordState.category.includes('其他')) isMatch = true; else if (!isOther && recordState.category === cat) isMatch = true;
-                const icon = isOther ? (isMatch ? recordState.category.split(' ')[0] : '🎨') : (cat.split(' ')[0] || '📝'); const name = isOther ? '自訂其他' : (cat.substring(icon.length).trim() || cat);
+                const isOther = cat.includes('其他'); 
+                let isMatch = false;
+                
+                if (isOther) {
+                    const standardCats = categories[recordState.type].filter(c => !c.includes('其他'));
+                    if (!standardCats.includes(recordState.category)) {
+                        isMatch = true;
+                        isCustomMatchGlobal = true;
+                    }
+                } else {
+                    if (recordState.category === cat) isMatch = true;
+                }
+                
+                const icon = isOther ? (isMatch ? selectedCustomIconRecord : '🎨') : (cat.split(' ')[0] || '📝'); 
+                const name = isOther ? '自訂' : (cat.substring(icon.length).trim() || cat);
+                
                 const div = document.createElement('div'); div.className = `record-cat-item ${isMatch ? 'active' : ''}`;
-                div.onclick = () => { recordState.category = cat; if (isOther) openEmojiPicker('record'); else renderRecordCategories(); };
-                div.innerHTML = `<div class="record-cat-icon">${icon}</div><span>${name}</span>`; grid.appendChild(div);
+                div.onclick = () => { 
+                    if (isOther) {
+                        openEmojiPicker('record'); 
+                    } else {
+                        recordState.category = cat; 
+                        renderRecordCategories(); 
+                    }
+                };
+                div.innerHTML = `<div class="record-cat-icon">${icon}</div><span>${name}</span>`; 
+                grid.appendChild(div);
             });
+
+            const customContainer = document.getElementById('custom-name-container');
+            if (isCustomMatchGlobal) {
+                customContainer.style.display = 'flex';
+            } else {
+                customContainer.style.display = 'none';
+            }
         }
 
         function updateRecordDateDisplay() {
@@ -1035,12 +1095,18 @@
                 finalAmt = Math.round(finalAmt * 100) / 100; if (finalAmt <= 0) { alert('請輸入有效金額！'); return; }
                 const year = recordState.date.getFullYear(); const month = String(recordState.date.getMonth() + 1).padStart(2, '0'); const day = String(recordState.date.getDate()).padStart(2, '0'); const dateStr = `${year}-${month}-${day}`; 
                 
+                let finalCategory = recordState.category;
+                if (document.getElementById('custom-name-container').style.display !== 'none') {
+                    const customName = document.getElementById('record-custom-name').value.trim() || '其他';
+                    finalCategory = `${selectedCustomIconRecord} ${customName}`;
+                }
+
                 if (recordState.mode === 'add') {
-                    executeAdd(finalAmt, recordState.category, dateStr, recordState.type);
+                    executeAdd(finalAmt, finalCategory, dateStr, recordState.type);
                 } else {
                     const index = records.findIndex(r => r.id === recordState.id);
                     if (index !== -1) {
-                        records[index] = { id: recordState.id, type: recordState.type, amount: finalAmt, category: recordState.category, date: dateStr };
+                        records[index] = { id: recordState.id, type: recordState.type, amount: finalAmt, category: finalCategory, date: dateStr };
                         if (window.saveToFirebase) window.saveToFirebase(records);
                         currentSelectedYear = year; currentSelectedMonth = recordState.date.getMonth(); viewMode = 'month';
                         syncHeaderDisplay();
