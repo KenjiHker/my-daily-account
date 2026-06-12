@@ -1,10 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>家庭記帳日記 - 專屬雲端版</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-touch-fullscreen" content="yes">
+    <meta name="theme-color" content="#f5f8fa" id="theme-color-meta">
+    
+    <style>
+        /* --- 基礎變數與 Apple 雙主題風格 --- */
+        html { background-color: var(--bg-color); height: 100%; width: 100%; }
+        
+        :root {
+            --bg-color: #f5f8fa; --primary-color: #4ab3e3; --income-color: #7bc7c3; --expense-color: #f7a3b6;
+            --text-main: #333333; --text-sub: #888888; --card-bg: #ffffff; --radius-main: 16px; --radius-sub: 12px;
+            --calendar-today-bg: #ff7b7b; --border-color: #eef2f5; --input-bg: #fafbfe; --nav-btn-bg: #f0f4f8;
+            --nav-btn-text: #555555; --black-stroke: #222222;
+            --calc-bg: #fdf6f0; --calc-btn-num: #ffffff; --calc-btn-op: #ffe4e1; --calc-btn-eq: #ffe066; --calc-text: #5d5146;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #121212; --text-main: #f5f5f7; --text-sub: #a1a1a6; --card-bg: #1c1c1e;
+            --border-color: #2c2c2e; --input-bg: #2c2c2e; --nav-btn-bg: #2c2c2e; --nav-btn-text: #e5e5ea;
+            --black-stroke: #ffffff;
+            --calc-bg: #25211e; --calc-btn-num: #3a3532; --calc-btn-op: #5c4d4a; --calc-btn-eq: #b39224; --calc-text: #f5f5f7;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; transition: background-color 0.3s, border-color 0.3s, color 0.3s; }
+        input, textarea, select { user-select: text; -webkit-user-select: text; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); color: var(--text-main); line-height: 1.4; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+        a, button, .clickable, .history-item, .nav-btn, .cal-day, .emoji-item, .calc-btn, .month-cell-btn { cursor: pointer; }
+
+        /* --- 登入畫面樣式 --- */
+        #auth-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
+        #auth-screen.hidden { display: none !important; }
+        .google-btn { background-color: #ffffff; color: #757575; border: 1px solid #ddd; border-radius: 24px; padding: 12px 24px; font-size: 16px; font-weight: bold; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; margin-top: 20px; }
+        .google-btn img { width: 24px; height: 24px; }
+        [data-theme="dark"] .google-btn { background-color: #333; color: #fff; border-color: #555; }
+        
+        .user-profile-badge { font-size: 12px; color: var(--text-sub); margin-right: 8px; display: flex; align-items: center; gap: 6px; cursor: pointer;}
+        .user-profile-badge img { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border-color); }
+
+        /* --- 頂部導覽列功能鈕 --- */
+        .top-action-bar { flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 12px 20px; background: var(--card-bg); border-bottom: 1px solid var(--border-color); }
+        .left-btns { display: flex; gap: 8px; align-items: center; }
+        .capsule-btn { background: #000000; color: #ffffff; border: none; padding: 6px 16px; border-radius: 20px; font-size: 14px; font-weight: bold; min-height: 36px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+        [data-theme="dark"] .capsule-btn { background: #ffffff; color: #000000; }
+        .theme-capsule-btn { background: var(--nav-btn-bg); border: none; width: 36px; height: 36px; border-radius: 50%; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .center-month-selector { font-size: 18px; font-weight: bold; color: var(--text-main); display: flex; align-items: center; gap: 6px; background: none; border: none; padding: 8px 12px; border-radius: 8px; }
+        .triangle-down { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--text-main); display: inline-block; }
+        .nav-btn { background: var(--nav-btn-bg); border: none; padding: 0 12px; border-radius: 20px; font-size: 13px; font-weight: bold; color: var(--nav-btn-text); display: flex; align-items: center; justify-content: center; min-height: 38px; }
+
+        /* --- 固定中間圓餅圖看板 --- */
+        .header-dashboard { flex-shrink: 0; background: var(--card-bg); padding: 12px 20px 16px 20px; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; box-shadow: 0 8px 20px rgba(0,0,0,0.04); text-align: center; z-index: 10; margin-bottom: 0; touch-action: pan-y; }
+        #chart-swipe-track { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; will-change: transform; }
+        .chart-container { position: relative; width: 240px; height: 240px; margin: 0 auto; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        #pieChart { width: 240px; height: 240px; display: block; }
+        .chart-center-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; justify-content: center; align-items: center; width: 130px; height: 130px; background: var(--card-bg); border-radius: 50%; z-index: 10; overflow: hidden; }
+        .coin-canvas-container { width: 100px; height: 65px; position: relative; margin-top: 8px; margin-bottom: 2px; display: flex; align-items: flex-end; justify-content: center; overflow: hidden; }
+        .chart-center-text .title { font-size: 11px; color: var(--text-sub); font-weight: bold; margin-bottom: 1px; }
+        .chart-center-text .balance { font-size: 14px; font-weight: 800; color: var(--text-main); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* --- 歷史明細容器區 --- */
+        .container { flex: 1; padding: 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
+        .history-container { min-height: calc(100% + 1px); } /* 確保即使空白也能觸發滑動回彈 */
+        .empty-state-wrapper { display: flex; flex-direction: column; align-items: center; padding-top: 60px; color: var(--text-sub); }
+        .empty-text-main { font-size: 15px; color: #8e8e93; font-weight: 500; }
+        
+        .fixed-center-add-btn { position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: 64px; height: 64px; background-color: #ff7b7b; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #222; box-shadow: 0 4px 12px rgba(255, 123, 123, 0.4); z-index: 2500; cursor: pointer; }
+        [data-theme="dark"] .fixed-center-add-btn { border-color: #fff; }
+        
+        /* 修復 iOS Safari 的 + 號絕對定位問題 */
+        .fixed-center-add-btn::before, .fixed-center-add-btn::after { content: ''; position: absolute; background-color: white; border-radius: 2px; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        .fixed-center-add-btn::before { width: 28px; height: 4px; }
+        .fixed-center-add-btn::after { width: 4px; height: 28px; }
+
+        .date-group { background: var(--card-bg); border: 2px solid #222222; border-radius: 18px; margin-bottom: 16px; overflow: hidden; box-shadow: 0 4px 0px #222222; }
+        [data-theme="dark"] .date-group { border-color: #ffffff; box-shadow: 0 4px 0px #ffffff; }
+        .date-header { padding: 14px 16px; font-size: 16px; font-weight: bold; color: var(--text-main); border-bottom: 2px solid #222222; display: flex; justify-content: space-between; align-items: center; }
+        [data-theme="dark"] .date-header { border-bottom-color: #ffffff; }
+        .date-summary-total { font-weight: bold; font-size: 16px; color: #4ab3e3; }
+        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid var(--border-color); background: var(--card-bg); min-height: 58px; }
+        .history-item:active { background-color: var(--nav-btn-bg); }
+        .history-item:last-child { border-bottom: none; }
+        .item-left { display: flex; align-items: center; gap: 12px; }
+        .item-icon { width: 36px; height: 36px; border-radius: 50%; background: #eef7fc; border: 1.5px solid #222222; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        [data-theme="dark"] .item-icon { background: #233540; border-color: #ffffff; }
+        .item-info { display: flex; flex-direction: column; }
+        .item-category { font-size: 15px; font-weight: bold; color: var(--text-main); }
+        .item-diary { font-size: 12px; color: var(--text-sub); margin-top: 3px; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .item-right-action-wrapper { display: flex; align-items: center; gap: 12px; }
+        .item-amount-box { display: flex; flex-direction: column; align-items: flex-end; }
+        .item-amount { font-size: 16px; font-weight: bold; color: var(--text-main); }
+        .list-action-delete-btn { background: #fff5f5; color: #ff5b5b; border: 1.5px solid #ff5b5b; font-size: 12px; font-weight: bold; padding: 6px 12px; border-radius: 8px; min-height: 32px; display: flex; align-items: center; justify-content: center; }
+        [data-theme="dark"] .list-action-delete-btn { background: #2c1919; color: #ff8787; border-color: #ff8787; }
+
+        /* --- 彈窗與計算機 --- */
+        .month-grid-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 8px 4px; }
+        .month-cell-btn { height: 54px; border: 2px solid var(--border-color); background: var(--card-bg); border-radius: var(--radius-sub); font-size: 15px; font-weight: bold; color: var(--text-main); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }
+        .month-cell-btn.active { background: var(--primary-color); border-color: var(--primary-color); color: #ffffff; box-shadow: 0 4px 12px rgba(74, 179, 227, 0.25); }
+
+        .delete-confirm-box { display: flex; flex-direction: column; gap: 16px; padding: 8px 4px; text-align: center; }
+        .delete-confirm-msg { font-size: 16px; font-weight: bold; color: var(--text-main); line-height: 1.5; margin-bottom: 4px; }
+        .delete-modal-actions { display: flex; gap: 12px; width: 100%; }
+        .action-confirm-block-btn { flex: 1; height: 50px; background: #ff5b5b; color: #ffffff; border: 2.5px solid #222222; border-radius: var(--radius-sub); font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 #222222; }
+        [data-theme="dark"] .action-confirm-block-btn { border-color: #ffffff; box-shadow: 0 4px 0 #ffffff; }
+        .action-cancel-block-btn { flex: 1; height: 50px; background: var(--nav-btn-bg); color: var(--text-main); border: 2.5px solid #222222; border-radius: var(--radius-sub); font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 #222222; }
+        [data-theme="dark"] .action-cancel-block-btn { border-color: #ffffff; box-shadow: 0 4px 0 #ffffff; }
+
+        .calendar-sheet { height: 100%; max-height: 100% !important; border-radius: 0 !important; display: flex; flex-direction: column; border-top: none !important; background: var(--card-bg); padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: 0 !important; overflow: hidden !important; animation: none !important; }
+        #modal-date-records { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: max(40px, env(safe-area-inset-bottom) + 20px); }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; text-align: center; margin-bottom: 16px; padding: 12px; background: var(--input-bg); border-radius: var(--radius-main); border: 1.5px solid var(--border-color); }
+        .cal-week-title { font-size: 13px; font-weight: 800; color: var(--text-sub); padding: 4px 0; }
+        .cal-day { font-size: 15px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; justify-content: center; position: relative; aspect-ratio: 1; margin: 0 auto; width: 38px; height: 38px; border-radius: 50%; }
+        .cal-day.blur-day { color: #ccc !important; opacity: 0.4; }
+        .cal-day.today-circle { background-color: var(--calendar-today-bg) !important; color: #ffffff !important; font-weight: bold; }
+        .cal-day.selected-circle { background-color: var(--text-main); color: var(--card-bg) !important; font-weight: bold; }
+        .day-dot { position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 5px; height: 5px; background-color: #ff5b5b; border-radius: 50%; }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: none; align-items: flex-end; }
+        .modal-overlay.active { display: flex; }
+        .modal-sheet { width: 100%; background: var(--card-bg); border-top-left-radius: 24px; border-top-right-radius: 24px; padding: 20px; padding-bottom: max(20px, env(safe-area-inset-bottom)); max-height: 88vh; overflow-y: auto; box-shadow: 0 -4px 20px rgba(0,0,0,0.15); animation: slideUp 0.25s cubic-bezier(0.1, 0.76, 0.55, 0.94); }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .modal-title { font-size: 17px; font-weight: 800; color: var(--text-main); }
+        .modal-close { font-size: 20px; color: var(--text-sub); background: none; border: none; padding: 4px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center;}
+        
+        .input-ctrl { width: 100%; height: 46px; border: 1px solid var(--border-color); border-radius: var(--radius-sub); padding: 0 12px; font-size: 15px; background-color: var(--input-bg); color: var(--text-main); outline: none; }
+        .type-selector { display: flex; gap: 10px; margin-bottom: 14px; }
+        .type-btn { flex: 1; height: 46px; border: 2px solid var(--border-color); background: var(--card-bg); border-radius: var(--radius-sub); font-size: 15px; font-weight: bold; color: var(--text-sub); display: flex; align-items: center; justify-content: center; transition: all 0.2s;}
+        .type-btn.active[data-type="expense"] { border-color: var(--expense-color); background: var(--expense-color); color: #ffffff; }
+        .type-btn.active[data-type="income"] { border-color: var(--income-color); background: var(--income-color); color: #ffffff; }
+        
+        .emoji-picker-container { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; max-height: 240px; overflow-y: auto; padding: 6px; border: 1px solid var(--border-color); border-radius: var(--radius-sub); background: var(--bg-color); }
+        .emoji-item { font-size: 22px; height: 44px; display: flex; align-items: center; justify-content: center; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border-color); }
+
+        .calc-sheet { background-color: var(--calc-bg) !important; border-top: 3px solid var(--primary-color); }
+        .calc-screen-box { background: var(--card-bg); border-radius: var(--radius-main); padding: 12px 16px; margin-bottom: 16px; border: 2px solid var(--text-main); text-align: right; box-shadow: 0 4px 0 var(--text-main); }
+        .calc-display { font-size: 28px; font-weight: 900; color: var(--calc-text); }
+        .calc-keyboard-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+        .calc-btn { height: 54px; border-radius: 18px; border: 2px solid var(--text-main); box-shadow: 0 4px 0 var(--text-main); display: flex; align-items: center; justify-content: center; }
+        .calc-btn:active { transform: translateY(4px); box-shadow: 0 0px 0 var(--text-main); }
+        .calc-btn.btn-num { background-color: var(--calc-btn-num); }
+        .calc-btn.btn-op { background-color: var(--calc-btn-op); }
+        .calc-btn.btn-eq { background-color: var(--calc-btn-eq); }
+        .calc-btn.btn-c { background-color: #ffb3b3; }
+        .calc-btn.btn-back { background-color: #ffe4b5; }
+        .handdrawn-font-svg { width: 100%; height: 100%; display: block; }
+        .handdrawn-font-svg path { fill: none; stroke: var(--calc-text); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
+
+        .full-screen-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100dvh; background: var(--bg-color); z-index: 3000; display: none; flex-direction: column; overflow: hidden; animation: slideUp 0.3s cubic-bezier(0.1, 0.76, 0.55, 0.94); }
+        .full-screen-modal.active { display: flex; }
+        .record-header-bar { display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 12px; background: var(--card-bg); border-bottom: 1px solid var(--border-color); font-size: 18px; font-weight: bold; color: var(--text-main); z-index: 10; }
+        .record-top-content { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; -webkit-overflow-scrolling: touch; padding-bottom: 55vh; }
+        .record-cat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px 10px; padding: 10px 0; }
+        .record-cat-item { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--text-sub); font-weight: bold; }
+        .record-cat-icon { width: 48px; height: 48px; border-radius: 50%; background: var(--input-bg); display: flex; align-items: center; justify-content: center; font-size: 24px; border: 2px solid transparent; transition: all 0.2s; }
+        .record-cat-item.active { color: var(--text-main); }
+        .record-cat-item.active .record-cat-icon { border-color: var(--primary-color); background: #eef7fc; transform: scale(1.1); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        [data-theme="dark"] .record-cat-item.active .record-cat-icon { background: #233540; }
+
+        .record-bottom-calc-area { position: absolute; bottom: 0; left: 0; width: 100%; height: 50dvh; background: var(--calc-bg); border-top: 3px solid var(--primary-color); border-top-left-radius: 28px; border-top-right-radius: 28px; padding-bottom: env(safe-area-inset-bottom); display: flex; flex-direction: column; transform: translateY(0); transition: transform 0.4s cubic-bezier(0.2, 0.85, 0.3, 1.05); box-shadow: 0 -4px 20px rgba(0,0,0,0.1); z-index: 100; }
+        .record-bottom-calc-area.collapsed { transform: translateY(calc(100% - 96px)); }
+        .drawer-handle-wrap { width: 100%; height: 24px; display: flex; align-items: center; justify-content: center; cursor: grab; padding: 14px 0 6px 0; }
+        .drawer-handle { width: 40px; height: 5px; background: var(--text-sub); border-radius: 3px; opacity: 0.4; }
+
+        #recordModal .calc-screen-box { margin: 0 16px 8px 16px; padding: 4px 16px; min-height: 36px; display: flex; align-items: center; justify-content: flex-end; }
+        #recordModal .calc-display { font-size: 24px; line-height: 1; }
+        .record-date-ctrl { display: flex; align-items: center; justify-content: space-between; background: var(--card-bg); padding: 4px 12px; border-radius: var(--radius-main); border: 2px solid var(--text-main); margin: 0 16px 12px; box-shadow: 0 3px 0 var(--text-main); min-height: 32px; }
+        .record-date-btn { background: var(--nav-btn-bg); border: none; font-size: 12px; font-weight: bold; color: var(--text-main); padding: 4px 12px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+        .record-date-text { font-size: 14px; font-weight: 800; color: var(--text-main); }
+        #record-date-today-badge { font-size: 12px; font-weight: bold; color: #ffffff; background: #ff7b7b; padding: 2px 6px; border-radius: 6px; margin-right: 4px; }
+        #record-date-weekday { font-size: 12px; }
+
+        #recordModal .calc-keyboard-grid { flex: 1; display: grid; grid-template-rows: repeat(4, minmax(0, 1fr)); grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 0 16px 12px 16px; min-height: 0; }
+        #recordModal .calc-btn { height: 100%; min-height: 0; border-radius: 12px; box-shadow: 0 3px 0 var(--text-main); }
+        #recordModal .calc-btn:active { transform: translateY(3px); box-shadow: 0 0px 0 var(--text-main); }
+    </style>
+</head>
+<body>
+
+    <div id="auth-screen">
+        <h2 style="font-size: 24px; margin-bottom: 8px;">🏠 家庭記帳本</h2>
+        <p id="auth-status-text" style="color: var(--text-sub); font-size: 14px;">正在驗證登入狀態...</p>
+        <button id="google-login-btn" class="google-btn" onclick="signInWithGoogle()" style="display: none;">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google">
+            使用 Google 登入
+        </button>
+        <p id="auth-error-msg" style="color: #ff5b5b; font-size: 13px; font-weight: bold; margin-top: 16px; display: none;">此帳號無權限進入，請聯絡管理員。</p>
+    </div>
+
+    <div class="top-action-bar">
+        <div class="left-btns">
+            <button class="capsule-btn" id="view-mode-toggle-btn" onclick="toggleViewMode()">月</button>
+            <button class="theme-capsule-btn" onclick="toggleTheme()" id="theme-btn">☀️</button>
+        </div>
+        
+        <button class="center-month-selector" id="center-month-picker-trigger" onclick="openMonthModal()">
+            <span id="current-display-month-label">2026年 6月</span>
+            <span class="triangle-down"></span>
+        </button>
+        
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <div class="user-profile-badge" id="user-profile-badge" style="display: none;" onclick="signOutGoogle()">
+                <img id="user-avatar" src="" alt="User">
+                <span id="user-name">登出</span>
+            </div>
+            <button class="nav-btn" style="background: var(--primary-color); color: #fff; font-size: 16px; padding: 0 14px;" onclick="openCalendarModal()">📅</button>
+        </div>
+    </div>
+
+    <div class="header-dashboard">
+        <div id="chart-swipe-track">
+            <div class="chart-container" id="main-chart-container">
+                <canvas id="pieChart" width="480" height="480"></canvas>
+                <div class="chart-center-text">
+                    <div class="coin-canvas-container">
+                        <canvas id="coinDropCanvas" width="320" height="220" style="width: 100%; height: 100%;"></canvas>
+                    </div>
+                    <span class="title" id="chart-center-title">月結餘</span>
+                    <span class="balance" id="total-balance">$0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="history-container" id="history-list"></div>
+    </div>
+
+    <div class="modal-overlay" id="calendarModal" onclick="closeCalendarModal(event)">
+        <div class="modal-sheet calendar-sheet" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="cal-ctrl-btn nav-btn" onclick="adjustCalendarMonth(-1)">◀ 前月</button>
+                    <span id="cal-month-title" style="font-weight:900; font-size:17px; color:var(--text-main); margin:0 4px;">2026年 06月</span>
+                    <button class="cal-ctrl-btn nav-btn" onclick="adjustCalendarMonth(1)">後月 ▶</button>
+                </div>
+                <button class="modal-close" onclick="closeCalendarModal(null)">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v9h9"></path><circle cx="12" cy="12" r="3.5" fill="var(--card-bg)" stroke="currentColor"></circle></svg>
+                </button>
+            </div>
+            <div class="calendar-grid" id="calendar-grid-container"></div>
+            <div style="font-size: 14px; font-weight: 800; margin-bottom: 8px; color:var(--text-main);" id="selected-date-label">📍 選定日期</div>
+            <div id="modal-date-records"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="monthModal" onclick="closeMonthModal(event)">
+        <div class="modal-sheet" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <span class="modal-title">📅 請選擇查看月份</span>
+                <button class="modal-close" onclick="closeMonthModal(null)">✕</button>
+            </div>
+            <div class="month-grid-container" id="month-buttons-target"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="emojiModal" onclick="closeEmojiModal()">
+        <div class="modal-sheet" style="z-index: 3100;" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <span style="font-size: 16px; font-weight: bold;">🎨 挑選您專屬項目的圖示</span>
+                <button class="modal-close" onclick="closeEmojiModal()">✕</button>
+            </div>
+            <div class="emoji-picker-container" id="emoji-grid-target"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="deleteConfirmModal" style="z-index: 4000;" onclick="closeDeleteModal()">
+        <div class="modal-sheet" onclick="event.stopPropagation()">
+            <div class="delete-confirm-box">
+                <div class="delete-confirm-msg">確認刪除這筆紀錄？</div>
+                <div class="delete-modal-actions">
+                    <button class="action-cancel-block-btn" onclick="closeDeleteModal()">取消</button>
+                    <button class="action-confirm-block-btn" onclick="executeDeleteRecord()">確認</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="full-screen-modal" id="recordModal">
+        <div class="record-header-bar">
+            <button onclick="closeRecordModal()" class="nav-btn" style="min-width: 44px;">✕</button>
+            <span id="record-modal-title">修改帳目</span>
+            <button onclick="promptDeleteRecord()" id="record-delete-btn" class="nav-btn" style="color: #ff5b5b; font-size: 18px; min-width: 44px; padding: 0;">🗑️</button>
+        </div>
+        
+        <div class="record-top-content">
+            <div class="type-selector" style="margin-bottom: 0;">
+                <button class="type-btn" data-type="income" id="record-type-inc" onclick="setRecordType('income')">💰 收入</button>
+                <button class="type-btn active" data-type="expense" id="record-type-exp" onclick="setRecordType('expense')">💸 支出</button>
+            </div>
+            
+            <div class="record-cat-grid" id="record-cat-grid"></div>
+            
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+                <label style="font-size:13px; font-weight:bold; color:var(--text-sub);">備忘日記</label>
+                <input type="text" id="record-diary" class="input-ctrl" placeholder="寫點備忘心情吧...">
+            </div>
+        </div>
+
+        <div class="record-bottom-calc-area">
+            <div class="drawer-handle-wrap" id="calc-drag-area">
+                <div class="drawer-handle"></div>
+            </div>
+
+            <div class="calc-screen-box">
+                <div class="calc-display" id="record-amount">0</div>
+            </div>
+
+            <div class="record-date-ctrl">
+                <button class="record-date-btn" onclick="adjustRecordDate(-1)">◀</button>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span id="record-date-today-badge" style="display: none;">今日</span>
+                    <span class="record-date-text" id="record-date-display">2026-06-09</span>
+                    <span id="record-date-weekday" style="color: var(--text-sub); font-weight: bold;">星期二</span>
+                </div>
+                <button class="record-date-btn" onclick="adjustRecordDate(1)">▶</button>
+            </div>
+
+            <div class="calc-keyboard-grid">
+                <button class="calc-btn btn-num" onclick="pressRecordCalc('7')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M20,12 C28,11.5 35,13 40,12 C36,18 30,26 26,32" /></svg></button>
+                <button class="calc-btn btn-num" onclick="pressRecordCalc('8')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M30,20 C23,17 25,9 31,11 C37,13 33,20 30,20 C25,21 23,31 30,31 C37,31 35,21 30,20" /></svg></button>
+                <button class="calc-btn btn-num" onclick="pressRecordCalc('9')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M38,16 C38,10 26,10 26,17 C26,24 38,23 38,16 C38,22 36,28 30,32" /></svg></button>
+                <button class="calc-btn btn-op" onclick="pressRecordCalc('÷')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M18,20 C28,19 38,21 42,20" /><path d="M30,11 C32,11 31,9 29,10 C28,11 30,12 30,11" /><path d="M30,29 C31,28 30,31 29,30 C29,29 30,29 30,29" /></svg></button>
+                <button class="calc-btn btn-c" onclick="pressRecordCalc('C')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M16,30 L22,12 L28,30 M18,24 L26,24 M44,16 C34,12 30,22 34,30 C38,34 46,30 46,24" /></svg></button>
+                
+                <button class="calc-btn btn-num" onclick="pressRecordCalc('4')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M34,10 C28,18 22,23 18,24 C25,25 35,23.5 42,24" /><path d="M34,18 C35,23 34,28 34,32" /></svg></button>
+                <button class="calc-btn btn-num" onclick="pressRecordCalc('5')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M38,11 C29,12 24,11.5 22,11 C21,17 21,20 23,20 C29,19 38,22 36,29 C34,34 22,32 20,29" /></svg></button>
+                <button class="calc-btn btn-num" onclick="pressRecordCalc('6')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M36,11 C26,16 20,22 22,27 C24,32 36,32 36,25 C36,19 26,20 25,25" /></svg></button>
+                <button class="calc-btn btn-op" onclick="pressRecordCalc('×')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M20,10 C28,18 35,26 40,30" /><path d="M40,10 C32,18 25,25 20,30" /></svg></button>
+                <button class="calc-btn btn-back" onclick="pressRecordCalc('BACK')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M40,20 L20,20 M28,12 L20,20 L28,28" /></svg></button>
+                
+                <button class="calc-btn btn-num" onclick="pressRecordCalc('1')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M24,15 C28,13 31,10 32,11 C31,18 32,26 32,31" /></svg></button>
+                <button class="calc-btn btn-num" onclick="pressRecordCalc('2')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M21,14 C23,10 34,9 34,15 C34,21 28,26 22,31 C28,31 36,30.5 38,31" /></svg></button>
+                <button class="calc-btn btn-num" onclick="pressRecordCalc('3')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M22,12 C30,11 36,13 32,19 C38,22 34,31 24,29" /></svg></button>
+                <button class="calc-btn btn-op" onclick="pressRecordCalc('+')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M18,20 C28,19 34,21 42,20" /><path d="M30,9 C29,18 31,26 30,32" /></svg></button>
+                <button class="calc-btn btn-eq" style="grid-row: span 2;" onclick="pressRecordCalc('OK')"><svg class="handdrawn-font-svg" viewBox="0 0 60 90"><path d="M15,40 L45,40 M15,50 L45,50" /></svg></button>
+                
+                <button class="calc-btn btn-num" style="grid-column: span 2;" onclick="pressRecordCalc('0')"><svg class="handdrawn-font-svg" viewBox="0 0 100 40"><path d="M50,10 C38,10 36,30 50,30 C64,30 62,10 50,10" /></svg></button>
                 <button class="calc-btn btn-num" onclick="pressRecordCalc('.')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M30,26 C31.5,26 31.5,28 30,28 C28.5,28 28.5,26 30,26" /></svg></button>
                 <button class="calc-btn btn-op" onclick="pressRecordCalc('-')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M18,20 C28,18.5 34,21.5 42,20" /></svg></button>
             </div>
         </div>
     </div>
-
-    <div class="fixed-center-add-btn" onclick="openAddModal()"></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
@@ -27,39 +370,36 @@
         const provider = new GoogleAuthProvider();
         const recordsRef = ref(db, 'records');
 
-        // 登入功能
         window.signInWithGoogle = function() {
             document.getElementById('auth-error-msg').style.display = 'none';
             signInWithPopup(auth, provider).catch(err => console.log(err));
         };
 
-        // 登出功能
         window.signOutGoogle = function() {
             signOut(auth).then(() => location.reload());
         };
 
-        // 監聽登入狀態 (完全依賴 Firebase 規則把關白名單)
         onAuthStateChanged(auth, (user) => {
             const authScreen = document.getElementById('auth-screen');
             const userBadge = document.getElementById('user-profile-badge');
             const errorMsg = document.getElementById('auth-error-msg');
+            const statusText = document.getElementById('auth-status-text');
+            const loginBtn = document.getElementById('google-login-btn');
 
             if (user) {
-                // 登入咗，直接嘗試讀取雲端資料
                 authScreen.classList.add('hidden');
                 userBadge.style.display = 'flex';
                 document.getElementById('user-avatar').src = user.photoURL || '';
-                
-                // 啟動資料庫即時同步 (如果 Firebase 規則發現佢唔喺白名單，會自動拒絕讀取)
                 startDatabaseSync();
             } else {
                 authScreen.classList.remove('hidden');
                 userBadge.style.display = 'none';
-                window.records = []; // 清空本地資料
+                statusText.innerText = '請使用已授權的 Google 帳號登入';
+                loginBtn.style.display = 'flex';
+                window.records = []; 
             }
         });
 
-        // 啟動資料庫即時同步
         function startDatabaseSync() {
             onValue(recordsRef, (snapshot) => {
                 const data = snapshot.val();
@@ -68,26 +408,24 @@
                     parsedRecords = Array.isArray(data) ? data : Object.values(data);
                     parsedRecords = parsedRecords.filter(r => r !== null);
                 }
-                
                 window.records = parsedRecords;
-                
                 if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
                 if (document.getElementById('calendarModal') && document.getElementById('calendarModal').classList.contains('active')) {
                     if (typeof window.renderGridCalendar === 'function') window.renderGridCalendar();
                     if (typeof window.renderModalDateRecords === 'function') window.renderModalDateRecords();
                 }
             }, (error) => {
-                // 如果 Firebase Rules 拒絕讀取 (唔喺白名單)，會觸發呢度
                 if (error.code === 'PERMISSION_DENIED') {
                     document.getElementById('auth-screen').classList.remove('hidden');
                     document.getElementById('auth-error-msg').innerText = '帳號無權限進入，請聯絡管理員加入白名單。';
                     document.getElementById('auth-error-msg').style.display = 'block';
+                    document.getElementById('google-login-btn').style.display = 'flex';
+                    document.getElementById('auth-status-text').innerText = '請使用已授權的 Google 帳號登入';
                     signOut(auth);
                 }
             });
         }
 
-        // 暴露存檔功能給主邏輯
         window.saveToFirebase = function(recordsArray) {
             set(recordsRef, recordsArray).catch(error => {
                 if(error.code === 'PERMISSION_DENIED') {
@@ -148,7 +486,6 @@
             coinCanvas = document.getElementById('coinDropCanvas');
             coinCtx = coinCanvas.getContext('2d');
             
-            // 這裡完全移除了 localStorage 載入，完全依賴 Firebase
             syncHeaderDisplay();
             initCoinLoop();
             initDragHandle();
