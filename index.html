@@ -39,7 +39,6 @@
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; transition: background-color 0.5s, border-color 0.5s, color 0.5s; }
-        input, textarea, select { user-select: text; -webkit-user-select: text; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
@@ -51,7 +50,7 @@
             position: fixed;
             top: 0; left: 0; 
             width: 100vw; 
-            height: 100dvh; 
+            height: 100dvh; /* 確保全高，不留白 */
             overflow: hidden; 
             overscroll-behavior-y: none;
         }
@@ -164,7 +163,7 @@
         .modal-title { font-size: 17px; font-weight: 800; color: var(--text-main); }
         .modal-close { font-size: 20px; color: var(--text-sub); background: none; border: none; padding: 4px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center;}
         
-        /* 🚨 將輸入框偽裝成按鈕，點擊彈出系統對話框，避開 HTML 輸入法觸發 */
+        /* 🚨 將輸入框改為「偽裝按鈕」，不會觸發 HTML 輸入法焦點 */
         .input-ctrl { 
             width: 100%; 
             height: 46px; 
@@ -373,6 +372,7 @@
                 <button class="type-btn active" data-type="expense" id="record-type-exp" onclick="setRecordType('expense')">💸 支出</button>
             </div>
             
+            <!-- 使用 <div> 模擬輸入框，點擊時觸發原生 prompt 對話框 -->
             <div style="display: flex; flex-direction: column; gap: 6px;">
                 <label style="font-size:13px; font-weight:bold; color:var(--text-sub);">備忘日記</label>
                 <div id="record-diary-display" class="input-ctrl" style="color:var(--text-sub);" onclick="editDiary()">寫點備忘心情吧...</div>
@@ -999,11 +999,10 @@
             closeEmojiModal(); 
         }
 
-        /* 🚨 新增：調用原生系統框，自帶取消/好 按鈕 */
+        /* 🚨 系統對話框，自帶 取消/確認 按鈕 */
         window.editDiary = function() {
             let current = recordState.diary || '';
             let res = prompt('請輸入備忘日記：', current);
-            // 如果 user 㩒咗「好」(OK)
             if (res !== null) {
                 recordState.diary = res.trim();
                 if (recordState.diary !== '') {
@@ -1014,7 +1013,6 @@
                     document.getElementById('record-diary-display').style.color = 'var(--text-sub)';
                 }
             }
-            // 如果 user 㩒咗「取消」(Cancel)，res 就會係 null，原本嘅字唔會被覆蓋
         };
 
         window.editCustomName = function() {
