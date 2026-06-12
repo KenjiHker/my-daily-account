@@ -497,32 +497,35 @@
     </script>
 
     <script>
-        // 解決手機虛擬鍵盤彈出導致畫面向上推擠及收合後底部留白的問題
-        document.addEventListener('focusin', function(e) {
+        // 強制修復 iOS 鍵盤收合後的底部白邊與排版偏移問題
+        const resetScroll = () => {
+            setTimeout(() => {
+                window.scrollTo(0, 0);
+                document.body.scrollTop = 0;
+                document.documentElement.scrollTop = 0;
+            }, 10);
+        };
+
+        document.addEventListener('focusout', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                // 輸入文字時強制將下方計算機收合，為虛擬鍵盤騰出空間避免過度推擠
-                const bottomArea = document.querySelector('.record-bottom-calc-area');
-                if (bottomArea && !bottomArea.classList.contains('collapsed')) {
-                    bottomArea.classList.add('collapsed');
-                }
+                resetScroll();
             }
         });
 
-        document.addEventListener('focusout', function(e) {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                // 輸入完成、鍵盤收起後，強制將畫面完全回復至最頂點，消除留白
-                setTimeout(function() {
-                    window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
-                    document.body.scrollTop = 0;
-                    document.documentElement.scrollTop = 0;
-                }, 10);
-                
-                // 再度保險延遲觸發，針對 iOS 動畫收合時間差
-                setTimeout(function() {
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => {
+                // 當視覺視窗高度恢復接近螢幕高度時，執行重置滾動
+                if (window.visualViewport.height >= window.innerHeight * 0.9) {
+                    resetScroll();
+                }
+            });
+            window.visualViewport.addEventListener('scroll', () => {
+                // 如果視窗已經恢復，確保不被卡在上面
+                if (window.visualViewport.height >= window.innerHeight * 0.9) {
                     window.scrollTo(0, 0);
-                }, 100);
-            }
-        });
+                }
+            });
+        }
 
         window.addEventListener('load', function() {
             setTimeout(function() { window.scrollTo(0, 1); }, 0);
