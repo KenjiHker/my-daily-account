@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>家庭記帳日記 - 專屬雲端版</title>
+    <title>家庭記帳日記 - 純雲端版</title>
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -88,7 +88,7 @@
             width: 100vw; height: 100dvh;
             background-color: var(--bg-color);
             z-index: 99999;
-            display: none; 
+            display: flex; /* 預設顯示，強制登入 */
             flex-direction: column;
             align-items: center;
             justify-content: center;
@@ -275,7 +275,7 @@
 
     <div id="login-screen">
         <h1 class="login-title">家庭記帳日記</h1>
-        <p class="login-subtitle">雲端同步，資料不遺失</p>
+        <p class="login-subtitle">純雲端版，請先登入</p>
         <button class="google-btn" onclick="signInWithGoogle()" style="width: 80%; max-width: 320px; height: 50px;">
             <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google"> 授權 Google 帳號登入
         </button>
@@ -295,19 +295,11 @@
             </div>
             
             <div class="settings-group">
-                <span class="settings-label">資料同步設定</span>
-                <label style="display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: bold; color: var(--text-main);">
-                    <input type="checkbox" id="local-mode-toggle" onchange="toggleLocalMode()" style="width: 20px; height: 20px;">
-                    啟用本機模式 (不雲端同步)
-                </label>
-            </div>
-
-            <div class="settings-group">
                 <span class="settings-label">雲端帳號狀態</span>
                 <div id="sidebar-auth-status" style="font-size: 14px; color: var(--text-main); margin-bottom: 8px; font-weight: 600;">檢查狀態中...</div>
                 
                 <button id="sidebar-google-login-btn" class="google-btn" onclick="signInWithGoogle()" style="display: none; background-color: #eef7fc; color: #4ab3e3; border-color: #4ab3e3;">
-                    登入雲端帳號
+                    重新登入
                 </button>
                 <button id="sidebar-google-logout-btn" class="google-btn" onclick="signOutGoogle()" style="display: none; background-color: #fff5f5; color: #ff5b5b; border-color: #ff5b5b;">
                     登出雲端帳號
@@ -508,7 +500,6 @@
         
         let recordsRef = null; 
 
-        // 全局 Toast 提示函數
         window.showToast = function(msg, duration = 3000) {
             const toast = document.getElementById('toast-container');
             if (!toast) return;
@@ -539,52 +530,35 @@
             const loginBtn = document.getElementById('sidebar-google-login-btn');
 
             if (user) {
+                // 已登入：隱藏登入屏，開始從雲端拉取資料
                 loginScreen.style.display = 'none';
                 statusText.innerText = `已登入: ${user.email}`;
                 logoutBtn.style.display = 'flex';
                 loginBtn.style.display = 'none';
                 
-                // ⚠️ 修正：改回共用資料庫路徑，配合家庭記帳
                 recordsRef = ref(db, 'records');
-
-                // ⚠️ 關鍵：不管雲端點樣，先載入 Local Data 顯示畫面，避免空白！
-                loadLocalData();
-
-                if (!window.isLocalMode) {
-                    startDatabaseSync();
-                }
+                startDatabaseSync(); // 純雲端拉取
             } else {
-                statusText.innerText = '尚未登入 (雲端已暫停)';
+                // 未登入：強制顯示登入屏，並清空畫面資料
+                loginScreen.style.display = 'flex';
+                statusText.innerText = '尚未登入';
                 logoutBtn.style.display = 'none';
                 loginBtn.style.display = 'flex';
                 
-                if (window.isLocalMode) {
-                    loginScreen.style.display = 'none';
-                    loadLocalData();
-                } else {
-                    loginScreen.style.display = 'flex'; 
+                window.records = []; // 清空資料
+                if (typeof window.syncHeaderDisplay === 'function') {
+                    window.syncHeaderDisplay();
                 }
             }
         });
-
-        function loadLocalData() {
-            let localStr = localStorage.getItem('family_accounting_records');
-            if (localStr) {
-                try { window.records = JSON.parse(localStr); } catch(e) { window.records = []; }
-            } else {
-                window.records = [];
-            }
-            if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
-        }
 
         function startDatabaseSync() {
             if (!recordsRef) return;
             
             showToast("⏳ 正在同步雲端資料...");
             
+            // 監聽 Firebase 資料庫變化，覆蓋現有畫面
             onValue(recordsRef, (snapshot) => {
-                if (window.isLocalMode) return; 
-
                 const data = snapshot.val();
                 let cloudRecords = [];
                 if (data) {
@@ -592,32 +566,9 @@
                     cloudRecords = cloudRecords.filter(r => r !== null);
                 }
 
-                let localStr = localStorage.getItem('family_accounting_records');
-                let localRecords = localStr ? JSON.parse(localStr) : [];
-                
-                let mergedMap = new Map();
-                cloudRecords.forEach(r => mergedMap.set(r.id, r));
-                
-                let hasNewLocal = false;
-                localRecords.forEach(r => {
-                    if (!mergedMap.has(r.id)) {
-                        mergedMap.set(r.id, r);
-                        hasNewLocal = true;
-                    }
-                });
-                
-                let finalRecords = Array.from(mergedMap.values()).sort((a, b) => b.id - a.id);
-                window.records = finalRecords;
-                localStorage.setItem('family_accounting_records', JSON.stringify(finalRecords));
-                
+                // 🌟 純雲端模式：直接使用雲端資料，唔做本地合併
+                window.records = cloudRecords.sort((a, b) => b.id - a.id);
                 showToast("✅ 雲端同步完成！");
-
-                if (hasNewLocal && auth.currentUser) {
-                    set(recordsRef, finalRecords).catch(e => {
-                        console.log('Sync Error:', e);
-                        showToast("❌ 雲端上傳失敗：" + e.message);
-                    });
-                }
 
                 if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
                 if (document.getElementById('calendarModal') && document.getElementById('calendarModal').classList.contains('active')) {
@@ -628,53 +579,33 @@
                 showToast("❌ 雲端同步失敗：" + error.message, 5000);
                 if (error.code === 'PERMISSION_DENIED') {
                     document.getElementById('sidebar-auth-status').innerText = '帳號無權限，請確認資料庫規則';
-                    alert("⚠️ Firebase 權限被拒絕！\n請至 Firebase 後台修改 Realtime Database 的規則 (Rules)，確保允許白名單讀寫。");
+                    alert("⚠️ Firebase 權限被拒絕！\n請至 Firebase 後台確認您是否在白名單內。");
                 }
             });
         }
 
         window.saveToFirebase = function(recordsArray) {
-            localStorage.setItem('family_accounting_records', JSON.stringify(recordsArray));
-            
-            if (auth.currentUser && navigator.onLine !== false && !window.isLocalMode && recordsRef) {
+            // 🌟 純雲端模式：移除所有 localStorage，直接上傳 Firebase
+            if (auth.currentUser && navigator.onLine !== false && recordsRef) {
                 set(recordsRef, recordsArray)
                     .then(() => showToast("☁️ 資料已儲存至雲端"))
                     .catch(error => {
                         showToast("❌ 雲端儲存失敗：" + error.message, 5000);
                         if(error.code === 'PERMISSION_DENIED') {
-                            alert("Firebase 權限不足，請確定後台安全規則已開啟。");
+                            alert("Firebase 權限不足，請確定您在白名單內。");
                         }
                     });
-            } else if (window.isLocalMode) {
-                showToast("💾 已儲存至本機");
+            } else {
+                showToast("❌ 雲端儲存失敗：請檢查網路或登入狀態", 5000);
             }
         };
     </script>
 
     <script>
-        window.isLocalMode = localStorage.getItem('family_accounting_local_mode') === 'true';
-
-        window.addEventListener('DOMContentLoaded', () => {
-            const toggle = document.getElementById('local-mode-toggle');
-            if(toggle) toggle.checked = window.isLocalMode;
-        });
-
-        window.toggleLocalMode = function() {
-            const toggle = document.getElementById('local-mode-toggle');
-            window.isLocalMode = toggle.checked;
-            localStorage.setItem('family_accounting_local_mode', window.isLocalMode);
-            
-            if (window.isLocalMode) {
-                alert('✅ 已切換為「本機模式」！\n您的資料將不會上傳到雲端。');
-                syncHeaderDisplay(); // 強制刷新
-            } else {
-                alert('☁️ 已恢復「雲端同步」！');
-                location.reload();
-            }
-        };
-
         window.addEventListener('load', function() {
             setTimeout(function() { window.scrollTo(0, 1); }, 0);
+            // 畫面初始為空，等待 Firebase 登入後拉取
+            if (!window.records) window.records = [];
             syncHeaderDisplay();
         });
 
@@ -704,7 +635,7 @@
 
         const categories = {
             expense: ['🍔 餐飲飲食', '🚌 交通出行', '🛍️ 購物消費', '🏠 房租', '🎬 娛樂生活', '💡 固網水電', '🩺 醫療健康', '👗 服飾鞋包', '🛒 居家百貨', '📚 進修學習', '🤝 社交交際', '✨ 美容保養', '🐾 寵物花費', '🏋️ 運動健身', '🎨 其他'],
-            income: ['💼 薪薪收入', '📈 投資理財', '🎁 收到紅包', '💻 兼職副業', '💰 獎金補貼', '🤝 經營分紅', '📦 網拍二手', '♻️ 其它收入', '🎨 其他']
+            income: ['💼 薪資收入', '📈 投資理財', '🎁 收到紅包', '💻 兼職副業', '💰 獎金補貼', '🤝 經營分紅', '📦 網拍二手', '♻️ 其它收入', '🎨 其他']
         };
 
         const monsterEmojiList = [
@@ -747,8 +678,6 @@
             initDragHandle();
             initChartSwipe();
             initCalendarSwipe();
-            
-            syncHeaderDisplay();
             
             document.getElementById('cal-swipe-track').addEventListener('click', function(e) {
                 const cell = e.target.closest('.cal-day');
