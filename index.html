@@ -72,7 +72,7 @@
             width: 100vw; height: 100dvh;
             background-color: var(--bg-color);
             z-index: 99999;
-            display: flex;
+            display: none; /* 預設隱藏，由 JS 判斷是否需要顯示 */
             flex-direction: column;
             align-items: center;
             justify-content: center;
@@ -260,7 +260,7 @@
 
     <div id="login-screen">
         <h1 class="login-title">家庭記帳日記</h1>
-        <p class="login-subtitle">請先登入以存取您的雲端資料</p>
+        <p class="login-subtitle">雲端同步，資料不遺失</p>
         <button class="google-btn" onclick="signInWithGoogle()" style="width: 80%; max-width: 320px; height: 50px;">
             <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google"> 授權 Google 帳號登入
         </button>
@@ -278,9 +278,22 @@
                 <span class="settings-label">外觀設定</span>
                 <button class="settings-action-btn" onclick="toggleTheme()" id="sidebar-theme-btn">☀️ 明亮模式</button>
             </div>
+            
+            <div class="settings-group">
+                <span class="settings-label">資料同步設定</span>
+                <label style="display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: bold; color: var(--text-main);">
+                    <input type="checkbox" id="local-mode-toggle" onchange="toggleLocalMode()" style="width: 20px; height: 20px;">
+                    啟用本機模式 (不雲端同步)
+                </label>
+            </div>
+
             <div class="settings-group">
                 <span class="settings-label">雲端帳號狀態</span>
                 <div id="sidebar-auth-status" style="font-size: 14px; color: var(--text-main); margin-bottom: 8px; font-weight: 600;">檢查狀態中...</div>
+                
+                <button id="sidebar-google-login-btn" class="google-btn" onclick="signInWithGoogle()" style="display: none; background-color: #eef7fc; color: #4ab3e3; border-color: #4ab3e3;">
+                    登入雲端帳號
+                </button>
                 <button id="sidebar-google-logout-btn" class="google-btn" onclick="signOutGoogle()" style="display: none; background-color: #fff5f5; color: #ff5b5b; border-color: #ff5b5b;">
                     登出雲端帳號
                 </button>
@@ -301,7 +314,7 @@
         </div>
         
         <button class="center-month-selector" id="center-month-picker-trigger" onclick="openMonthModal()">
-            <span id="current-display-month-label">2026年 6月</span>
+            <span id="current-display-month-label">加載中...</span>
             <span class="triangle-down"></span>
         </button>
         
@@ -336,7 +349,7 @@
             <div class="modal-header">
                 <div style="display:flex; align-items:center; gap:8px;">
                     <button class="cal-ctrl-btn nav-btn" onclick="adjustCalendarMonth(-1)">◀ 前月</button>
-                    <span id="cal-month-title" style="font-weight:900; font-size:17px; color:var(--text-main); margin:0 4px;">2026年 06月</span>
+                    <span id="cal-month-title" style="font-weight:900; font-size:17px; color:var(--text-main); margin:0 4px;">加載中...</span>
                     <button class="cal-ctrl-btn nav-btn" onclick="adjustCalendarMonth(1)">後月 ▶</button>
                 </div>
                 <button class="modal-close" onclick="closeCalendarModal(null)">
@@ -426,8 +439,8 @@
                 <button class="record-date-btn" onclick="adjustRecordDate(-1)">◀</button>
                 <div style="display: flex; align-items: center; gap: 6px;">
                     <span id="record-date-today-badge" style="display: none;">今日</span>
-                    <span class="record-date-text" id="record-date-display">2026-06-09</span>
-                    <span id="record-date-weekday" style="color: var(--text-sub); font-weight: bold;">星期二</span>
+                    <span class="record-date-text" id="record-date-display">加載中...</span>
+                    <span id="record-date-weekday" style="color: var(--text-sub); font-weight: bold;">-</span>
                 </div>
                 <button class="record-date-btn" onclick="adjustRecordDate(1)">▶</button>
             </div>
@@ -459,9 +472,9 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -477,10 +490,14 @@
         const db = getDatabase(app);
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
-        const recordsRef = ref(db, 'records');
+        
+        let recordsRef = null; 
 
         window.signInWithGoogle = function() {
             document.getElementById('login-error-msg').style.display = 'none';
+            // 強制彈出帳號選擇視窗
+            provider.setCustomParameters({ prompt: 'select_account' });
+            
             signInWithPopup(auth, provider).catch(err => {
                 console.log(err);
                 document.getElementById('login-error-msg').style.display = 'block';
@@ -488,42 +505,90 @@
         };
 
         window.signOutGoogle = function() {
-            signOut(auth).then(() => location.reload());
+            signOut(auth).then(() => location.reload()); // 登出但不清空本地儲存
         };
 
-        // 監聽登入狀態：控制全螢幕登入畫面的顯示與隱藏
+        // 監聽登入狀態：已登入則隱藏登入屏，否則顯示
         onAuthStateChanged(auth, (user) => {
             const loginScreen = document.getElementById('login-screen');
             const statusText = document.getElementById('sidebar-auth-status');
             const logoutBtn = document.getElementById('sidebar-google-logout-btn');
+            const loginBtn = document.getElementById('sidebar-google-login-btn');
 
             if (user) {
                 // 已登入：隱藏登入屏，顯示主畫面並拉取資料
                 loginScreen.style.display = 'none';
                 statusText.innerText = `已登入: ${user.email}`;
                 logoutBtn.style.display = 'flex';
-                startDatabaseSync();
+                loginBtn.style.display = 'none';
+                
+                // 為了避免 Firebase Security Rules 報錯，將儲存路徑改為專屬使用者 ID 的節點
+                recordsRef = ref(db, 'users/' + user.uid + '/records');
+
+                if (!window.isLocalMode) {
+                    startDatabaseSync();
+                } else {
+                    loadLocalData();
+                }
             } else {
-                // 未登入：強制顯示全螢幕登入屏
-                loginScreen.style.display = 'flex';
-                statusText.innerText = '尚未登入';
+                // 未登入
+                statusText.innerText = '尚未登入 (雲端已暫停)';
                 logoutBtn.style.display = 'none';
-                window.records = []; 
-                if (typeof window.syncHeaderDisplay === 'function') {
-                    window.syncHeaderDisplay();
+                loginBtn.style.display = 'flex';
+                
+                if (window.isLocalMode) {
+                    loginScreen.style.display = 'none'; // 本機模式直接進入
+                    loadLocalData();
+                } else {
+                    loginScreen.style.display = 'flex'; // 強制登入
                 }
             }
         });
 
+        function loadLocalData() {
+            let localStr = localStorage.getItem('family_accounting_records');
+            if (localStr) {
+                try { window.records = JSON.parse(localStr); } catch(e) { window.records = []; }
+            } else {
+                window.records = [];
+            }
+            if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
+        }
+
         function startDatabaseSync() {
+            if (!recordsRef) return;
             onValue(recordsRef, (snapshot) => {
+                if (window.isLocalMode) return; // 如果已經是本機模式就不再拉資料
+
                 const data = snapshot.val();
-                let parsedRecords = [];
+                let cloudRecords = [];
                 if (data) {
-                    parsedRecords = Array.isArray(data) ? data : Object.values(data);
-                    parsedRecords = parsedRecords.filter(r => r !== null);
+                    cloudRecords = Array.isArray(data) ? data : Object.values(data);
+                    cloudRecords = cloudRecords.filter(r => r !== null);
                 }
-                window.records = parsedRecords;
+
+                let localStr = localStorage.getItem('family_accounting_records');
+                let localRecords = localStr ? JSON.parse(localStr) : [];
+                
+                let mergedMap = new Map();
+                cloudRecords.forEach(r => mergedMap.set(r.id, r));
+                
+                let hasNewLocal = false;
+                localRecords.forEach(r => {
+                    if (!mergedMap.has(r.id)) {
+                        mergedMap.set(r.id, r);
+                        hasNewLocal = true;
+                    }
+                });
+                
+                let finalRecords = Array.from(mergedMap.values()).sort((a, b) => b.id - a.id);
+                window.records = finalRecords;
+                localStorage.setItem('family_accounting_records', JSON.stringify(finalRecords));
+                
+                if (hasNewLocal && auth.currentUser) {
+                    set(recordsRef, finalRecords).catch(e => console.log('Sync Error:', e));
+                }
+
                 if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
                 if (document.getElementById('calendarModal') && document.getElementById('calendarModal').classList.contains('active')) {
                     if (typeof window.renderGridCalendar === 'function') window.renderGridCalendar();
@@ -531,27 +596,68 @@
                 }
             }, (error) => {
                 if (error.code === 'PERMISSION_DENIED') {
-                    document.getElementById('sidebar-auth-status').innerText = '帳號驗證失敗';
-                    document.getElementById('auth-error-msg').style.display = 'block';
-                    signOut(auth);
+                    document.getElementById('sidebar-auth-status').innerText = '帳號無權限存取 Firebase，請檢查規則';
+                    console.error("Firebase Security Rules 權限不足！請去 Firebase Console -> Realtime Database 修改 Rules 為 auth != null");
                 }
             });
         }
 
         window.saveToFirebase = function(recordsArray) {
-            set(recordsRef, recordsArray).catch(error => {
-                if(error.code === 'PERMISSION_DENIED') {
-                    alert("您沒有權限修改資料，請確認是否在白名單內。");
-                }
-            });
+            // 1. 無論是否登入，優先儲存到本地 LocalStorage
+            localStorage.setItem('family_accounting_records', JSON.stringify(recordsArray));
+            
+            // 2. 若有網路、已登入，且「非」本機模式，則自動上傳至雲端
+            if (auth.currentUser && navigator.onLine !== false && !window.isLocalMode && recordsRef) {
+                set(recordsRef, recordsArray).catch(error => {
+                    if(error.code === 'PERMISSION_DENIED') {
+                        alert("Firebase 權限不足，請確定後台安全規則已開啟。");
+                    }
+                });
+            }
         };
     </script>
 
     <script>
+        // 初始化本機模式開關
+        window.isLocalMode = localStorage.getItem('family_accounting_local_mode') === 'true';
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const toggle = document.getElementById('local-mode-toggle');
+            if(toggle) toggle.checked = window.isLocalMode;
+        });
+
+        window.toggleLocalMode = function() {
+            const toggle = document.getElementById('local-mode-toggle');
+            window.isLocalMode = toggle.checked;
+            localStorage.setItem('family_accounting_local_mode', window.isLocalMode);
+            
+            if (window.isLocalMode) {
+                alert('✅ 已切換為「本機模式」！\n您的資料將不會上傳到雲端。');
+            } else {
+                alert('☁️ 已恢復「雲端同步」！');
+                // 嘗試重整頁面來重新觸發雲端登入和拉取流程
+                location.reload();
+            }
+        };
+
         window.addEventListener('load', function() {
             setTimeout(function() { window.scrollTo(0, 1); }, 0);
         });
 
+        // 建立今日動態日期
+        const _nowDate = new Date();
+        const _y = _nowDate.getFullYear();
+        const _m = _nowDate.getMonth();
+        const _mStr = String(_m + 1).padStart(2, '0');
+        const _dStr = String(_nowDate.getDate()).padStart(2, '0');
+        
+        let viewMode = 'month'; 
+        let currentSelectedYear = _y;
+        let currentSelectedMonth = _m; 
+        let selectedDateStr = `${_y}-${_mStr}-${_dStr}`; 
+        let displayYear = _y; 
+        let displayMonth = _m; 
+        
         /* --- 側邊欄控制 --- */
         function openSettings() {
             document.getElementById('settings-sidebar').classList.add('active');
@@ -575,15 +681,10 @@
             '👗','👔','👟','💄','🧴','🏋️','⚽','🚴','✈️','🚄','🏝️','⛺'
         ];
 
-        var records = [];
-        let viewMode = 'month'; 
-        let currentSelectedYear = 2026;
-        let currentSelectedMonth = 5; 
+        var records = []; 
         let selectedCustomIconModal = '🎨';
         let selectedCustomIconRecord = '🎨';
         let pendingDeleteId = null; 
-        let displayYear, displayMonth; 
-        let selectedDateStr = '2026-06-09'; 
         let animationProgress = 0;
         let chartAnimationFrameId = null;
         let recordState = { mode: 'add', id: null, type: 'expense', category: '', date: new Date(), expression: '', amount: 0, diary: '' };
@@ -610,7 +711,6 @@
             coinCanvas = document.getElementById('coinDropCanvas');
             coinCtx = coinCanvas.getContext('2d');
             
-            syncHeaderDisplay();
             initCoinLoop();
             initDragHandle();
             initChartSwipe();
@@ -944,7 +1044,12 @@
             const cellDateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
             let cls = 'cal-day';
             if (isBlur) cls += ' blur-day';
-            if (cellDateStr === new Date().toISOString().split('T')[0]) cls += ' today-circle';
+            
+            // 使用動態計算的今日日期
+            const _t = new Date();
+            const todayISO = `${_t.getFullYear()}-${String(_t.getMonth() + 1).padStart(2, '0')}-${String(_t.getDate()).padStart(2, '0')}`;
+            if (cellDateStr === todayISO) cls += ' today-circle';
+            
             if (cellDateStr === selectedDateStr) cls += ' selected-circle';
             let dot = records.some(r => r.date === cellDateStr) ? '<div class="day-dot"></div>' : '';
             return `<div class="${cls}" data-date="${cellDateStr}">${day}${dot}</div>`;
@@ -1079,7 +1184,11 @@
         }
 
         function openAddModal() {
-            recordState.mode = 'add'; recordState.id = Date.now(); recordState.type = 'expense'; recordState.category = categories['expense'][0]; recordState.date = new Date(selectedDateStr || new Date().toISOString().split('T')[0]); recordState.expression = ''; recordState.amount = 0; recordState.diary = '';
+            // 動態產生今日日期
+            const _td = new Date();
+            const _tdStr = `${_td.getFullYear()}-${String(_td.getMonth() + 1).padStart(2, '0')}-${String(_td.getDate()).padStart(2, '0')}`;
+            
+            recordState.mode = 'add'; recordState.id = Date.now(); recordState.type = 'expense'; recordState.category = categories['expense'][0]; recordState.date = new Date(_tdStr); recordState.expression = ''; recordState.amount = 0; recordState.diary = '';
             selectedCustomIconRecord = '🎨';
             document.getElementById('record-modal-title').innerText = '新增帳目'; document.getElementById('record-delete-btn').style.display = 'none'; document.getElementById('record-amount').innerText = '0';
             
