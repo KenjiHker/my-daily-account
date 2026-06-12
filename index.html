@@ -9,14 +9,16 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-touch-fullscreen" content="yes">
-    <meta name="theme-color" content="#f5f8fa" id="theme-color-meta">
+    <meta name="theme-color" content="#FFF5CC" id="theme-color-meta">
     
     <style>
         /* --- 基礎變數與 Apple 雙主題風格 --- */
         html { background-color: var(--bg-color); width: 100%; height: 100%; overflow: hidden; }
         
         :root {
-            --bg-color: #f5f8fa; --primary-color: #4ab3e3; --income-color: #7bc7c3; --expense-color: #f7a3b6;
+            /* 1. 將整個底色轉做黃色 */
+            --bg-color: #FFF5CC; 
+            --primary-color: #4ab3e3; --income-color: #7bc7c3; --expense-color: #f7a3b6;
             --text-main: #333333; --text-sub: #888888; --card-bg: #ffffff; --radius-main: 16px; --radius-sub: 12px;
             --calendar-today-bg: #ff7b7b; --border-color: #eef2f5; --input-bg: #fafbfe; --nav-btn-bg: #f0f4f8;
             --nav-btn-text: #555555; --black-stroke: #222222;
@@ -24,7 +26,9 @@
         }
 
         [data-theme="dark"] {
-            --bg-color: #121212; --text-main: #f5f5f7; --text-sub: #a1a1a6; --card-bg: #1c1c1e;
+            /* 配合暗黑模式的黃底色 */
+            --bg-color: #2A2614; 
+            --text-main: #f5f5f7; --text-sub: #a1a1a6; --card-bg: #1c1c1e;
             --border-color: #2c2c2e; --input-bg: #2c2c2e; --nav-btn-bg: #2c2c2e; --nav-btn-text: #e5e5ea;
             --black-stroke: #ffffff;
             --calc-bg: #25211e; --calc-btn-num: #3a3532; --calc-btn-op: #5c4d4a; --calc-btn-eq: #b39224; --calc-text: #f5f5f7;
@@ -33,7 +37,6 @@
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; transition: background-color 0.3s, border-color 0.3s, color 0.3s; }
         input, textarea, select { user-select: text; -webkit-user-select: text; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         
-        /* 修改 body，改用 fixed 解決 iOS Safari 底部工具列遮擋問題 */
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
             background-color: var(--bg-color); 
@@ -48,10 +51,7 @@
         
         a, button, .clickable, .history-item, .nav-btn, .cal-day, .emoji-item, .calc-btn, .month-cell-btn { cursor: pointer; }
 
-        /* --- 登入畫面樣式 --- */
-        #auth-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
-        #auth-screen.hidden { display: none !important; }
-        .google-btn { background-color: #ffffff; color: #757575; border: 1px solid #ddd; border-radius: 24px; padding: 12px 24px; font-size: 16px; font-weight: bold; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; margin-top: 20px; }
+        .google-btn { background-color: #ffffff; color: #757575; border: 1px solid #ddd; border-radius: 24px; padding: 12px 24px; font-size: 16px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; width: 100%; }
         .google-btn img { width: 24px; height: 24px; }
         [data-theme="dark"] .google-btn { background-color: #333; color: #fff; border-color: #555; }
 
@@ -60,10 +60,22 @@
         .left-btns { display: flex; gap: 8px; align-items: center; }
         .capsule-btn { background: #000000; color: #ffffff; border: none; padding: 6px 16px; border-radius: 20px; font-size: 14px; font-weight: bold; min-height: 36px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
         [data-theme="dark"] .capsule-btn { background: #ffffff; color: #000000; }
-        .theme-capsule-btn { background: var(--nav-btn-bg); border: none; width: 36px; height: 36px; border-radius: 50%; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .theme-capsule-btn { background: var(--nav-btn-bg); border: none; width: 36px; height: 36px; border-radius: 50%; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); color: var(--text-main); }
         .center-month-selector { font-size: 18px; font-weight: bold; color: var(--text-main); display: flex; align-items: center; gap: 6px; background: none; border: none; padding: 8px 12px; border-radius: 8px; }
         .triangle-down { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--text-main); display: inline-block; }
         .nav-btn { background: var(--nav-btn-bg); border: none; padding: 0 12px; border-radius: 20px; font-size: 13px; font-weight: bold; color: var(--nav-btn-text); display: flex; align-items: center; justify-content: center; min-height: 38px; }
+
+        /* --- 設定側邊欄 (左至右動態移動) --- */
+        .sidebar-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9998; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+        .sidebar-overlay.active { opacity: 1; pointer-events: auto; }
+        .sidebar { position: fixed; top: 0; left: -300px; width: 280px; height: 100%; background: var(--card-bg); z-index: 9999; transition: left 0.3s cubic-bezier(0.1, 0.76, 0.55, 0.94); box-shadow: 4px 0 20px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .sidebar.active { left: 0; }
+        .sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: max(20px, env(safe-area-inset-top)) 20px 20px; border-bottom: 1px solid var(--border-color); }
+        .sidebar-header h2 { font-size: 20px; font-weight: 800; color: var(--text-main); margin: 0; }
+        .sidebar-content { padding: 20px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; }
+        .settings-group { display: flex; flex-direction: column; gap: 10px; }
+        .settings-label { font-size: 13px; font-weight: bold; color: var(--text-sub); margin-bottom: 4px; }
+        .settings-action-btn { background: var(--nav-btn-bg); color: var(--text-main); border: 2px solid var(--border-color); padding: 14px 16px; border-radius: 12px; font-size: 16px; font-weight: bold; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 10px; }
 
         /* --- 固定中間圓餅圖看板 --- */
         .header-dashboard { flex-shrink: 0; background: var(--card-bg); padding: 12px 20px 16px 20px; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; box-shadow: 0 8px 20px rgba(0,0,0,0.04); text-align: center; z-index: 10; margin-bottom: 0; touch-action: pan-y; }
@@ -77,7 +89,6 @@
 
         /* --- 歷史明細容器區 --- */
         .container { flex: 1; padding: 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
-        /* 移除了原本會造成底部多餘空白的 min-height 屬性，改為自然延展 */
         .history-container { width: 100%; } 
         .empty-state-wrapper { display: flex; flex-direction: column; align-items: center; padding-top: 60px; color: var(--text-sub); }
         .empty-text-main { font-size: 15px; color: #8e8e93; font-weight: 500; }
@@ -85,7 +96,6 @@
         .fixed-center-add-btn { position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: 64px; height: 64px; background-color: #ff7b7b; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #222; box-shadow: 0 4px 12px rgba(255, 123, 123, 0.4); z-index: 2500; cursor: pointer; }
         [data-theme="dark"] .fixed-center-add-btn { border-color: #fff; }
         
-        /* 修復 iOS Safari 的 + 號絕對定位問題 */
         .fixed-center-add-btn::before, .fixed-center-add-btn::after { content: ''; position: absolute; background-color: white; border-radius: 2px; top: 50%; left: 50%; transform: translate(-50%, -50%); }
         .fixed-center-add-btn::before { width: 28px; height: 4px; }
         .fixed-center-add-btn::after { width: 4px; height: 28px; }
@@ -195,20 +205,41 @@
 </head>
 <body>
 
-    <div id="auth-screen">
-        <h2 style="font-size: 24px; margin-bottom: 8px;">🏠 家庭記帳本</h2>
-        <p id="auth-status-text" style="color: var(--text-sub); font-size: 14px;">正在驗證登入狀態...</p>
-        <button id="google-login-btn" class="google-btn" onclick="signInWithGoogle()" style="display: none;">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google">
-            使用 Google 登入
-        </button>
-        <p id="auth-error-msg" style="color: #ff5b5b; font-size: 13px; font-weight: bold; margin-top: 16px; display: none;">此帳號無權限進入，請聯絡管理員。</p>
+    <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
+    <div class="sidebar" id="settings-sidebar">
+        <div class="sidebar-header">
+            <h2>設定</h2>
+            <button onclick="closeSettings()" class="nav-btn" style="min-width: 40px; min-height: 40px; font-size: 18px;">✕</button>
+        </div>
+        <div class="sidebar-content">
+            <div class="settings-group">
+                <span class="settings-label">外觀設定</span>
+                <button class="settings-action-btn" onclick="toggleTheme()" id="sidebar-theme-btn">☀️ 明亮模式</button>
+            </div>
+            <div class="settings-group">
+                <span class="settings-label">雲端帳號狀態</span>
+                <div id="sidebar-auth-status" style="font-size: 14px; color: var(--text-main); margin-bottom: 8px; font-weight: 600;">正在檢查登入狀態...</div>
+                <button id="sidebar-google-login-btn" class="google-btn" onclick="signInWithGoogle()" style="display: none;">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google"> 使用 Google 登入
+                </button>
+                <button id="sidebar-google-logout-btn" class="google-btn" onclick="signOutGoogle()" style="display: none; background-color: #fff5f5; color: #ff5b5b; border-color: #ff5b5b;">
+                    登出雲端帳號
+                </button>
+                <p id="auth-error-msg" style="color: #ff5b5b; font-size: 12px; font-weight: bold; margin-top: 8px; display: none;">此帳號無權限進入，請聯絡管理員。</p>
+            </div>
+        </div>
     </div>
 
     <div class="top-action-bar">
         <div class="left-btns">
+            <button class="theme-capsule-btn" onclick="openSettings()" style="margin-right: 4px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                    <line x1="4" y1="6" x2="20" y2="6"></line>
+                    <line x1="4" y1="12" x2="16" y2="12"></line>
+                    <line x1="4" y1="18" x2="12" y2="18"></line>
+                </svg>
+            </button>
             <button class="capsule-btn" id="view-mode-toggle-btn" onclick="toggleViewMode()">月</button>
-            <button class="theme-capsule-btn" onclick="toggleTheme()" id="theme-btn">☀️</button>
         </div>
         
         <button class="center-month-selector" id="center-month-picker-trigger" onclick="openMonthModal()">
@@ -395,19 +426,23 @@
         };
 
         onAuthStateChanged(auth, (user) => {
-            const authScreen = document.getElementById('auth-screen');
-            const errorMsg = document.getElementById('auth-error-msg');
-            const statusText = document.getElementById('auth-status-text');
-            const loginBtn = document.getElementById('google-login-btn');
+            const statusText = document.getElementById('sidebar-auth-status');
+            const loginBtn = document.getElementById('sidebar-google-login-btn');
+            const logoutBtn = document.getElementById('sidebar-google-logout-btn');
 
             if (user) {
-                authScreen.classList.add('hidden');
+                statusText.innerText = `已登入: ${user.email}`;
+                loginBtn.style.display = 'none';
+                logoutBtn.style.display = 'flex';
                 startDatabaseSync();
             } else {
-                authScreen.classList.remove('hidden');
-                statusText.innerText = '請使用已授權的 Google 帳號登入';
+                statusText.innerText = '未登入 (本機瀏覽)';
                 loginBtn.style.display = 'flex';
+                logoutBtn.style.display = 'none';
                 window.records = []; 
+                if (typeof window.syncHeaderDisplay === 'function') {
+                    window.syncHeaderDisplay();
+                }
             }
         });
 
@@ -427,11 +462,8 @@
                 }
             }, (error) => {
                 if (error.code === 'PERMISSION_DENIED') {
-                    document.getElementById('auth-screen').classList.remove('hidden');
-                    document.getElementById('auth-error-msg').innerText = '帳號無權限進入，請聯絡管理員加入白名單。';
+                    document.getElementById('sidebar-auth-status').innerText = '帳號驗證失敗';
                     document.getElementById('auth-error-msg').style.display = 'block';
-                    document.getElementById('google-login-btn').style.display = 'flex';
-                    document.getElementById('auth-status-text').innerText = '請使用已授權的 Google 帳號登入';
                     signOut(auth);
                 }
             });
@@ -450,6 +482,18 @@
         window.addEventListener('load', function() {
             setTimeout(function() { window.scrollTo(0, 1); }, 0);
         });
+
+        /* --- 側邊欄控制 --- */
+        function openSettings() {
+            document.getElementById('settings-sidebar').classList.add('active');
+            document.getElementById('settings-overlay').classList.add('active');
+        }
+        function closeSettings() {
+            document.getElementById('settings-sidebar').classList.remove('active');
+            document.getElementById('settings-overlay').classList.remove('active');
+        }
+        window.openSettings = openSettings;
+        window.closeSettings = closeSettings;
 
         const categories = {
             expense: ['🍔 餐飲飲食', '🚌 交通出行', '🛍️ 購物消費', '🏠 房租', '🎬 娛樂生活', '💡 固網水電', '🩺 醫療健康', '👗 服飾鞋包', '🛒 居家百貨', '📚 進修學習', '🤝 社交交際', '✨ 美容保養', '🐾 寵物花費', '🏋️ 運動健身', '🎨 其他'],
@@ -528,6 +572,8 @@
             }
             updateDashboard(); renderHistory();
         }
+
+        window.syncHeaderDisplay = syncHeaderDisplay;
 
         function toggleViewMode() { viewMode = viewMode === 'month' ? 'all' : 'month'; syncHeaderDisplay(); }
 
@@ -802,6 +848,7 @@
                 records = records.filter(r => r.id !== pendingDeleteId);
                 if (window.saveToFirebase) window.saveToFirebase(records);
                 closeDeleteModal(); closeRecordModal();
+                syncHeaderDisplay();
             }
         }
 
@@ -871,6 +918,7 @@
             if (window.saveToFirebase) window.saveToFirebase(records);
             const recordDate = new Date(date); currentSelectedYear = recordDate.getFullYear(); currentSelectedMonth = recordDate.getMonth();
             viewMode = 'month';
+            syncHeaderDisplay();
         }
 
         function openMonthModal() { document.getElementById('monthModal').classList.add('active'); renderMonthButtonsGrid(); }
@@ -887,10 +935,18 @@
         function toggleTheme() { 
             const currentTheme = document.documentElement.getAttribute('data-theme') || 'light'; const targetTheme = currentTheme === 'dark' ? 'light' : 'dark'; 
             document.documentElement.setAttribute('data-theme', targetTheme); localStorage.setItem('apple-app-theme', targetTheme); 
-            const metaTheme = document.getElementById('theme-color-meta'); if (metaTheme) metaTheme.setAttribute('content', targetTheme === 'dark' ? '#121212' : '#f5f8fa');
+            const metaTheme = document.getElementById('theme-color-meta'); if (metaTheme) metaTheme.setAttribute('content', targetTheme === 'dark' ? '#2A2614' : '#FFF5CC');
             updateThemeButtonIcon(); updateDashboard(); 
         }
-        function updateThemeButtonIcon() { const theme = document.documentElement.getAttribute('data-theme') || 'light'; document.getElementById('theme-btn').innerText = theme === 'light' ? '☀️' : '🌙'; }
+        window.toggleTheme = toggleTheme;
+
+        function updateThemeButtonIcon() { 
+            const theme = document.documentElement.getAttribute('data-theme') || 'light'; 
+            const btn = document.getElementById('sidebar-theme-btn');
+            if (btn) {
+                btn.innerText = theme === 'light' ? '☀️ 明亮模式' : '🌙 暗黑模式';
+            }
+        }
         function buildEmojiPickerGrid() { const container = document.getElementById('emoji-grid-target'); container.innerHTML = ''; monsterEmojiList.forEach(emoji => { const item = document.createElement('div'); item.className = 'emoji-item'; item.innerText = emoji; item.onclick = function() { selectEmoji(emoji); }; container.appendChild(item); }); }
         
         let currentActiveIconSource = 'record';
@@ -979,6 +1035,7 @@
                         records[index] = { id: recordState.id, type: recordState.type, amount: finalAmt, category: recordState.category, date: dateStr, diary: newDiary };
                         if (window.saveToFirebase) window.saveToFirebase(records);
                         currentSelectedYear = year; currentSelectedMonth = recordState.date.getMonth(); viewMode = 'month';
+                        syncHeaderDisplay();
                     }
                 }
                 closeRecordModal();
