@@ -13,14 +13,6 @@
     
     <style>
         /* --- 徹底還原最初完美無留白嘅佈局設定 --- */
-        html { 
-            background-color: var(--bg-color); 
-            width: 100vw; 
-            height: 100dvh; 
-            overflow: hidden; 
-            overscroll-behavior: none;
-        }
-        
         :root {
             --bg-color: #FFF5CC; 
             --primary-color: #4ab3e3; --income-color: #7bc7c3; --expense-color: #f7a3b6;
@@ -40,19 +32,23 @@
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; transition: background-color 0.5s, border-color 0.5s, color 0.5s; }
         
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+        /* 解決 iOS 等設備底部或頂部留白問題，確保絕對佔滿全螢幕且不可滾動 */
+        html, body { 
+            width: 100%; 
+            height: 100%; 
+            height: 100dvh; 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            overscroll-behavior: none;
             background-color: var(--bg-color); 
-            color: var(--text-main); 
-            line-height: 1.4; 
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
             display: flex; 
             flex-direction: column; 
-            position: fixed;
-            top: 0; left: 0; 
-            width: 100vw; 
-            height: 100dvh; /* 確保全高，不留白 */
-            overflow: hidden; 
-            overscroll-behavior-y: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            color: var(--text-main); 
+            line-height: 1.4; 
         }
         
         a, button, .clickable, .history-item, .nav-btn, .cal-day, .emoji-item, .calc-btn, .month-cell-btn { cursor: pointer; }
@@ -139,6 +135,8 @@
         .delete-modal-actions { display: flex; gap: 12px; width: 100%; }
         .action-confirm-block-btn { flex: 1; height: 50px; background: #ff5b5b; color: #ffffff; border: 2.5px solid #222222; border-radius: var(--radius-sub); font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 #222222; }
         [data-theme="dark"] .action-confirm-block-btn { border-color: #ffffff; box-shadow: 0 4px 0 #ffffff; }
+        .action-primary-block-btn { flex: 1; height: 50px; background: var(--primary-color); color: #ffffff; border: 2.5px solid #222222; border-radius: var(--radius-sub); font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 #222222; }
+        [data-theme="dark"] .action-primary-block-btn { border-color: #ffffff; box-shadow: 0 4px 0 #ffffff; }
         .action-cancel-block-btn { flex: 1; height: 50px; background: var(--nav-btn-bg); color: var(--text-main); border: 2.5px solid #222222; border-radius: var(--radius-sub); font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 #222222; }
         [data-theme="dark"] .action-cancel-block-btn { border-color: #ffffff; box-shadow: 0 4px 0 #ffffff; }
 
@@ -163,7 +161,7 @@
         .modal-title { font-size: 17px; font-weight: 800; color: var(--text-main); }
         .modal-close { font-size: 20px; color: var(--text-sub); background: none; border: none; padding: 4px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center;}
         
-        /* 🚨 將輸入框改為「偽裝按鈕」，不會觸發 HTML 輸入法焦點 */
+        /* 輸入框偽裝樣式 */
         .input-ctrl { 
             width: 100%; 
             height: 46px; 
@@ -359,6 +357,19 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="customPromptModal" style="z-index: 5000;" onclick="closeCustomPrompt()">
+        <div class="modal-sheet" onclick="event.stopPropagation()">
+            <div class="delete-confirm-box">
+                <div class="delete-confirm-msg" id="customPromptTitle">提示</div>
+                <input type="text" id="customPromptInput" style="width: 100%; height: 46px; border: 1px solid var(--border-color); border-radius: var(--radius-sub); padding: 0 12px; font-size: 16px; background-color: var(--input-bg); color: var(--text-main); outline: none; margin-bottom: 12px; text-align: left;" />
+                <div class="delete-modal-actions">
+                    <button class="action-cancel-block-btn" onclick="closeCustomPrompt()">取消</button>
+                    <button class="action-primary-block-btn" onclick="submitCustomPrompt()">確定</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="full-screen-modal" id="recordModal">
         <div class="record-header-bar">
             <button onclick="closeRecordModal()" class="nav-btn" style="min-width: 44px;">✕</button>
@@ -368,11 +379,10 @@
         
         <div class="record-top-content">
             <div class="type-selector" style="margin-bottom: 0;">
-                <button class="type-btn" data-type="income" id="record-type-inc" onclick="setRecordType('income')">💰 收入</button>
-                <button class="type-btn active" data-type="expense" id="record-type-exp" onclick="setRecordType('expense')">💸 支出</button>
+                <button class="type-btn active" data-type="income" id="record-type-inc" onclick="setRecordType('income')">💰 收入</button>
+                <button class="type-btn" data-type="expense" id="record-type-exp" onclick="setRecordType('expense')">💸 支出</button>
             </div>
             
-            <!-- 使用 <div> 模擬輸入框，點擊時觸發原生 prompt 對話框 -->
             <div style="display: flex; flex-direction: column; gap: 6px;">
                 <label style="font-size:13px; font-weight:bold; color:var(--text-sub);">備忘日記</label>
                 <div id="record-diary-display" class="input-ctrl" style="color:var(--text-sub);" onclick="editDiary()">寫點備忘心情吧...</div>
@@ -553,7 +563,7 @@
         let selectedDateStr = '2026-06-09'; 
         let animationProgress = 0;
         let chartAnimationFrameId = null;
-        let recordState = { mode: 'add', id: null, type: 'expense', category: '', date: new Date(), expression: '', amount: 0, diary: '' };
+        let recordState = { mode: 'add', id: null, type: 'income', category: '', date: new Date(), expression: '', amount: 0, diary: '' };
 
         let coinsArray = [];
         let globalTotalIncome = 0; 
@@ -999,36 +1009,60 @@
             closeEmojiModal(); 
         }
 
-        /* 🚨 系統對話框，自帶 取消/確認 按鈕 */
+        /* 🚨 自訂輸入彈窗邏輯 */
+        let customPromptCallback = null;
+
+        function openCustomPrompt(title, defaultValue, callback) {
+            document.getElementById('customPromptTitle').innerText = title;
+            const inputEl = document.getElementById('customPromptInput');
+            inputEl.value = defaultValue;
+            customPromptCallback = callback;
+            document.getElementById('customPromptModal').classList.add('active');
+            setTimeout(() => inputEl.focus(), 100);
+        }
+
+        function closeCustomPrompt() {
+            document.getElementById('customPromptModal').classList.remove('active');
+            customPromptCallback = null;
+        }
+
+        window.submitCustomPrompt = function() {
+            const val = document.getElementById('customPromptInput').value;
+            if (customPromptCallback) customPromptCallback(val);
+            closeCustomPrompt();
+        };
+
         window.editDiary = function() {
             let current = recordState.diary || '';
-            let res = prompt('請輸入備忘日記：', current);
-            if (res !== null) {
-                recordState.diary = res.trim();
-                if (recordState.diary !== '') {
-                    document.getElementById('record-diary-display').innerText = recordState.diary;
-                    document.getElementById('record-diary-display').style.color = 'var(--text-main)';
-                } else {
-                    document.getElementById('record-diary-display').innerText = '寫點備忘心情吧...';
-                    document.getElementById('record-diary-display').style.color = 'var(--text-sub)';
+            openCustomPrompt('請輸入備忘日記：', current, function(res) {
+                if (res !== null) {
+                    recordState.diary = res.trim();
+                    if (recordState.diary !== '') {
+                        document.getElementById('record-diary-display').innerText = recordState.diary;
+                        document.getElementById('record-diary-display').style.color = 'var(--text-main)';
+                    } else {
+                        document.getElementById('record-diary-display').innerText = '寫點備忘心情吧...';
+                        document.getElementById('record-diary-display').style.color = 'var(--text-sub)';
+                    }
                 }
-            }
+            });
         };
 
         window.editCustomName = function() {
             let current = document.getElementById('record-custom-name-display').innerText;
             if (current === '輸入自訂分類名稱...') current = '';
-            let res = prompt('請輸入自訂分類名稱：', current);
-            if (res !== null) {
-                let name = res.trim();
-                if (name !== '') {
-                    document.getElementById('record-custom-name-display').innerText = name;
-                    document.getElementById('record-custom-name-display').style.color = 'var(--text-main)';
-                } else {
-                    document.getElementById('record-custom-name-display').innerText = '輸入自訂分類名稱...';
-                    document.getElementById('record-custom-name-display').style.color = 'var(--text-sub)';
+            openCustomPrompt('請輸入自訂分類名稱：', current, function(res) {
+                if (res !== null) {
+                    let name = res.trim();
+                    if (name !== '') {
+                        document.getElementById('record-custom-name-display').innerText = name;
+                        document.getElementById('record-custom-name-display').style.color = 'var(--text-main)';
+                    } else {
+                        document.getElementById('record-custom-name-display').innerText = '輸入自訂分類名稱...';
+                        document.getElementById('record-custom-name-display').style.color = 'var(--text-sub)';
+                    }
                 }
-            }
+            });
         };
 
         function initDragHandle() {
@@ -1046,7 +1080,8 @@
         }
 
         function openAddModal() {
-            recordState.mode = 'add'; recordState.id = Date.now(); recordState.type = 'expense'; recordState.category = categories['expense'][0]; recordState.date = new Date(selectedDateStr || new Date().toISOString().split('T')[0]); recordState.expression = ''; recordState.amount = 0; recordState.diary = '';
+            // 修改預設為收入
+            recordState.mode = 'add'; recordState.id = Date.now(); recordState.type = 'income'; recordState.category = categories['income'][0]; recordState.date = new Date(selectedDateStr || new Date().toISOString().split('T')[0]); recordState.expression = ''; recordState.amount = 0; recordState.diary = '';
             selectedCustomIconRecord = '🎨';
             document.getElementById('record-modal-title').innerText = '新增帳目'; document.getElementById('record-delete-btn').style.display = 'none'; document.getElementById('record-amount').innerText = '0';
             
@@ -1056,7 +1091,7 @@
             document.getElementById('record-custom-name-display').innerText = '輸入自訂分類名稱...';
             document.getElementById('record-custom-name-display').style.color = 'var(--text-sub)';
 
-            setRecordType('expense', true); updateRecordDateDisplay(); toggleCalcDrawer('expand'); document.getElementById('recordModal').classList.add('active');
+            setRecordType('income', true); updateRecordDateDisplay(); toggleCalcDrawer('expand'); document.getElementById('recordModal').classList.add('active');
         }
 
         function openRecordModal(id) {
