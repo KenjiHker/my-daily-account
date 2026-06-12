@@ -13,7 +13,15 @@
     
     <style>
         /* --- 基礎變數與 Apple 雙主題風格 --- */
-        html { background-color: var(--bg-color); width: 100vw; height: 100%; height: 100dvh; overflow: hidden; }
+        html { 
+            background-color: var(--bg-color); 
+            width: 100vw; 
+            /* 解決底部未延伸問題：使用 100dvh 動態視口高度 */
+            height: 100dvh; 
+            height: -webkit-fill-available;
+            overflow: hidden; 
+            overscroll-behavior: none;
+        }
         
         :root {
             --bg-color: #FFF5CC; 
@@ -45,8 +53,10 @@
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
             width: 100vw;
-            height: 100%; height: 100dvh;
+            height: 100dvh; /* 確保 body 撐滿整個動態視口 */
+            min-height: -webkit-fill-available;
             overflow: hidden; 
+            overscroll-behavior-y: none;
         }
         
         a, button, .clickable, .history-item, .nav-btn, .cal-day, .emoji-item, .calc-btn, .month-cell-btn { cursor: pointer; }
@@ -65,17 +75,17 @@
         .triangle-down { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--text-main); display: inline-block; }
         .nav-btn { background: var(--nav-btn-bg); border: none; padding: 0 12px; border-radius: 20px; font-size: 13px; font-weight: bold; color: var(--nav-btn-text); display: flex; align-items: center; justify-content: center; min-height: 38px; }
 
-        /* --- 設定側邊欄 (左至右動態移動) --- */
-        .sidebar-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9998; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+        /* --- 設定側邊欄 (60fps 順滑動畫修正) --- */
+        .sidebar-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9998; opacity: 0; pointer-events: none; transition: opacity 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); will-change: opacity; }
         .sidebar-overlay.active { opacity: 1; pointer-events: auto; }
         
-        /* 修正為 transform 以達 60fps 流暢動畫 */
-        .sidebar { position: fixed; top: 0; left: 0; width: 280px; height: 100%; height: 100dvh; background: var(--card-bg); z-index: 9999; transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.3s ease; box-shadow: 0 0 0 rgba(0,0,0,0); display: flex; flex-direction: column; will-change: transform; }
+        /* 使用 transform 替代 left，並加入 will-change 啟動 GPU 硬體加速 */
+        .sidebar { position: fixed; top: 0; left: 0; width: 280px; height: 100dvh; background: var(--card-bg); z-index: 9999; transform: translateX(-100%); transition: transform 0.35s cubic-bezier(0.1, 0.8, 0.1, 1), box-shadow 0.35s ease; box-shadow: 0 0 0 rgba(0,0,0,0); display: flex; flex-direction: column; will-change: transform; }
         .sidebar.active { transform: translateX(0); box-shadow: 4px 0 20px rgba(0,0,0,0.1); }
         
         .sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: max(20px, env(safe-area-inset-top)) 20px 20px; border-bottom: 1px solid var(--border-color); }
         .sidebar-header h2 { font-size: 20px; font-weight: 800; color: var(--text-main); margin: 0; }
-        .sidebar-content { padding: 20px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; }
+        .sidebar-content { padding: 20px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
         .settings-group { display: flex; flex-direction: column; gap: 10px; }
         .settings-label { font-size: 13px; font-weight: bold; color: var(--text-sub); margin-bottom: 4px; }
         .settings-action-btn { background: var(--nav-btn-bg); color: var(--text-main); border: 2px solid var(--border-color); padding: 14px 16px; border-radius: 12px; font-size: 16px; font-weight: bold; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 10px; }
@@ -91,12 +101,13 @@
         .chart-center-text .balance { font-size: 14px; font-weight: 800; color: var(--text-main); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         /* --- 歷史明細容器區 --- */
-        .container { flex: 1; padding: 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
+        .container { flex: 1; padding: 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(120px + env(safe-area-inset-bottom)); background-color: var(--bg-color); height: 100%; }
         .history-container { width: 100%; } 
         .empty-state-wrapper { display: flex; flex-direction: column; align-items: center; padding-top: 60px; color: var(--text-sub); }
         .empty-text-main { font-size: 15px; color: #8e8e93; font-weight: 500; }
         
-        .fixed-center-add-btn { position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: 64px; height: 64px; background-color: #ff7b7b; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #222; box-shadow: 0 4px 12px rgba(255, 123, 123, 0.4); z-index: 2500; cursor: pointer; }
+        .fixed-center-add-btn { position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: 64px; height: 64px; background-color: #ff7b7b; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #222; box-shadow: 0 4px 12px rgba(255, 123, 123, 0.4); z-index: 2500; cursor: pointer; transition: transform 0.2s cubic-bezier(0.1, 0.8, 0.1, 1); will-change: transform; }
+        .fixed-center-add-btn:active { transform: translateX(-50%) scale(0.92); }
         [data-theme="dark"] .fixed-center-add-btn { border-color: #fff; }
         
         .fixed-center-add-btn::before, .fixed-center-add-btn::after { content: ''; position: absolute; background-color: white; border-radius: 2px; top: 50%; left: 50%; transform: translate(-50%, -50%); }
@@ -123,7 +134,7 @@
         .list-action-delete-btn { background: #fff5f5; color: #ff5b5b; border: 1.5px solid #ff5b5b; font-size: 12px; font-weight: bold; padding: 6px 12px; border-radius: 8px; min-height: 32px; display: flex; align-items: center; justify-content: center; }
         [data-theme="dark"] .list-action-delete-btn { background: #2c1919; color: #ff8787; border-color: #ff8787; }
 
-        /* --- 彈窗與計算機 --- */
+        /* --- 彈窗與計算機 (增強 60fps 動畫) --- */
         .month-grid-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 8px 4px; }
         .month-cell-btn { height: 54px; border: 2px solid var(--border-color); background: var(--card-bg); border-radius: var(--radius-sub); font-size: 15px; font-weight: bold; color: var(--text-main); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }
         .month-cell-btn.active { background: var(--primary-color); border-color: var(--primary-color); color: #ffffff; box-shadow: 0 4px 12px rgba(74, 179, 227, 0.25); }
@@ -136,7 +147,9 @@
         .action-cancel-block-btn { flex: 1; height: 50px; background: var(--nav-btn-bg); color: var(--text-main); border: 2.5px solid #222222; border-radius: var(--radius-sub); font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 #222222; }
         [data-theme="dark"] .action-cancel-block-btn { border-color: #ffffff; box-shadow: 0 4px 0 #ffffff; }
 
-        .calendar-sheet { height: 100%; height: 100dvh; max-height: 100dvh !important; border-radius: 0 !important; display: flex; flex-direction: column; border-top: none !important; background: var(--card-bg); padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: 0 !important; overflow: hidden !important; animation: none !important; }
+        .calendar-sheet { height: 100dvh; max-height: 100dvh !important; border-radius: 0 !important; display: flex; flex-direction: column; border-top: none !important; background: var(--card-bg); padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: 0 !important; overflow: hidden !important; animation: slideUpFull 0.35s cubic-bezier(0.1, 0.8, 0.1, 1) !important; will-change: transform; }
+        @keyframes slideUpFull { from { transform: translateY(100dvh); } to { transform: translateY(0); } }
+        
         #modal-date-records { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; text-align: center; padding: 12px; background: var(--input-bg); border-radius: var(--radius-main); border: 1.5px solid var(--border-color); box-sizing: border-box; }
         .cal-week-title { font-size: 13px; font-weight: 800; color: var(--text-sub); padding: 4px 0; }
@@ -146,10 +159,14 @@
         .cal-day.selected-circle { background-color: var(--text-main); color: var(--card-bg) !important; font-weight: bold; }
         .day-dot { position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 5px; height: 5px; background-color: #ff5b5b; border-radius: 50%; }
 
-        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; height: 100%; height: 100dvh; width: 100vw; background: rgba(0,0,0,0.5); z-index: 2000; display: none; align-items: flex-end; }
-        .modal-overlay.active { display: flex; }
-        .modal-sheet { width: 100%; background: var(--card-bg); border-top-left-radius: 24px; border-top-right-radius: 24px; padding: 20px; padding-bottom: max(20px, env(safe-area-inset-bottom)); max-height: 88vh; overflow-y: auto; box-shadow: 0 -4px 20px rgba(0,0,0,0.15); animation: slideUp 0.25s cubic-bezier(0.1, 0.76, 0.55, 0.94); }
+        /* 確保 overlay 完全覆蓋整個畫面，不留白 */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; height: 100dvh; width: 100vw; background: rgba(0,0,0,0.5); z-index: 2000; display: none; align-items: flex-end; transition: opacity 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); will-change: opacity; }
+        .modal-overlay.active { display: flex; opacity: 1; }
+        
+        /* 增加 Safe Area 適配與 60fps 動畫 */
+        .modal-sheet { width: 100%; background: var(--card-bg); border-top-left-radius: 24px; border-top-right-radius: 24px; padding: 20px; padding-bottom: max(20px, env(safe-area-inset-bottom)); max-height: 88dvh; overflow-y: auto; box-shadow: 0 -4px 20px rgba(0,0,0,0.15); animation: slideUp 0.35s cubic-bezier(0.1, 0.8, 0.1, 1); will-change: transform; }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
         .modal-title { font-size: 17px; font-weight: 800; color: var(--text-main); }
         .modal-close { font-size: 20px; color: var(--text-sub); background: none; border: none; padding: 4px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center;}
@@ -177,10 +194,10 @@
         .handdrawn-font-svg { width: 100%; height: 100%; display: block; }
         .handdrawn-font-svg path { fill: none; stroke: var(--calc-text); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
 
-        .full-screen-modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100%; height: 100dvh; background: var(--bg-color); z-index: 3000; display: none; flex-direction: column; overflow: hidden; animation: slideUp 0.3s cubic-bezier(0.1, 0.76, 0.55, 0.94); }
+        .full-screen-modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: var(--bg-color); z-index: 3000; display: none; flex-direction: column; overflow: hidden; animation: slideUpFull 0.35s cubic-bezier(0.1, 0.8, 0.1, 1); will-change: transform; }
         .full-screen-modal.active { display: flex; }
         .record-header-bar { display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 12px; background: var(--card-bg); border-bottom: 1px solid var(--border-color); font-size: 18px; font-weight: bold; color: var(--text-main); z-index: 10; }
-        .record-top-content { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; -webkit-overflow-scrolling: touch; padding-bottom: 55vh; }
+        .record-top-content { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; -webkit-overflow-scrolling: touch; padding-bottom: 55dvh; }
         .record-cat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px 10px; padding: 10px 0; }
         .record-cat-item { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--text-sub); font-weight: bold; }
         .record-cat-icon { width: 48px; height: 48px; border-radius: 50%; background: var(--input-bg); display: flex; align-items: center; justify-content: center; font-size: 24px; border: 2px solid transparent; transition: all 0.2s; }
@@ -188,8 +205,8 @@
         .record-cat-item.active .record-cat-icon { border-color: var(--primary-color); background: #eef7fc; transform: scale(1.1); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         [data-theme="dark"] .record-cat-item.active .record-cat-icon { background: #233540; }
 
-        .record-bottom-calc-area { position: absolute; bottom: 0; left: 0; width: 100%; height: 50dvh; background: var(--calc-bg); border-top: 3px solid var(--primary-color); border-top-left-radius: 28px; border-top-right-radius: 28px; padding-bottom: env(safe-area-inset-bottom); display: flex; flex-direction: column; transform: translateY(0); transition: transform 0.4s cubic-bezier(0.2, 0.85, 0.3, 1.05); box-shadow: 0 -4px 20px rgba(0,0,0,0.1); z-index: 100; }
-        .record-bottom-calc-area.collapsed { transform: translateY(calc(100% - 96px)); }
+        .record-bottom-calc-area { position: absolute; bottom: 0; left: 0; width: 100%; height: 50dvh; background: var(--calc-bg); border-top: 3px solid var(--primary-color); border-top-left-radius: 28px; border-top-right-radius: 28px; padding-bottom: env(safe-area-inset-bottom); display: flex; flex-direction: column; transform: translateY(0); transition: transform 0.35s cubic-bezier(0.1, 0.8, 0.1, 1); box-shadow: 0 -4px 20px rgba(0,0,0,0.1); z-index: 100; will-change: transform; }
+        .record-bottom-calc-area.collapsed { transform: translateY(calc(100% - 96px - env(safe-area-inset-bottom))); }
         .drawer-handle-wrap { width: 100%; height: 24px; display: flex; align-items: center; justify-content: center; cursor: grab; padding: 14px 0 6px 0; }
         .drawer-handle { width: 40px; height: 5px; background: var(--text-sub); border-radius: 3px; opacity: 0.4; }
 
@@ -663,13 +680,13 @@
                 if (!isSwiping) return; isSwiping = false; let deltaX = currentTouchX - touchStartX; const threshold = window.innerWidth * 0.2; 
                 let isAtRightEdge = (viewMode === 'all'); let direction = 0; 
                 if (deltaX > threshold) { direction = -1; } else if (deltaX < -threshold && !isAtRightEdge) { direction = 1; }
-                if (direction !== 0) { navigateSwipe(direction); } else { swipeTarget.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'; swipeTarget.style.transform = `translateX(0)`; setTimeout(() => { document.querySelectorAll('.ghost-chart').forEach(el => el.remove()); }, 300); }
+                if (direction !== 0) { navigateSwipe(direction); } else { swipeTarget.style.transition = 'transform 0.35s cubic-bezier(0.1, 0.8, 0.1, 1)'; swipeTarget.style.transform = `translateX(0)`; setTimeout(() => { document.querySelectorAll('.ghost-chart').forEach(el => el.remove()); }, 350); }
             });
 
             function navigateSwipe(direction) {
                 const today = new Date(); const realYear = today.getFullYear(); const realMonth = today.getMonth();
                 let targetTransformX = direction === 1 ? -window.innerWidth : window.innerWidth;
-                swipeTarget.style.transition = 'transform 0.3s ease-out'; swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
+                swipeTarget.style.transition = 'transform 0.35s cubic-bezier(0.1, 0.8, 0.1, 1)'; swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
                 setTimeout(() => {
                     if (direction === 1) { 
                         if (currentSelectedYear > realYear || (currentSelectedYear === realYear && currentSelectedMonth >= realMonth)) { viewMode = 'all'; } else { currentSelectedMonth++; if (currentSelectedMonth > 11) { currentSelectedMonth = 0; currentSelectedYear++; } }
@@ -677,7 +694,7 @@
                         if (viewMode === 'all') { viewMode = 'month'; currentSelectedYear = realYear; currentSelectedMonth = realMonth; } else { currentSelectedMonth--; if (currentSelectedMonth < 0) { currentSelectedMonth = 11; currentSelectedYear--; } }
                     }
                     document.querySelectorAll('.ghost-chart').forEach(el => el.remove()); swipeTarget.style.transition = 'none'; swipeTarget.style.transform = `translateX(0)`; syncHeaderDisplay(); 
-                }, 300);
+                }, 350);
             }
         }
 
@@ -715,18 +732,18 @@
                 
                 if (direction !== 0) {
                     let targetTransformX = direction === 1 ? -(swipeArea.offsetWidth + 20) : (swipeArea.offsetWidth + 20);
-                    swipeTarget.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                    swipeTarget.style.transition = 'transform 0.35s cubic-bezier(0.1, 0.8, 0.1, 1)';
                     swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
                     setTimeout(() => {
                         adjustCalendarMonth(direction);
                         document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
                         swipeTarget.style.transition = 'none';
                         swipeTarget.style.transform = `translateX(0)`;
-                    }, 300);
+                    }, 350);
                 } else {
-                    swipeTarget.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                    swipeTarget.style.transition = 'transform 0.35s cubic-bezier(0.1, 0.8, 0.1, 1)';
                     swipeTarget.style.transform = `translateX(0)`;
-                    setTimeout(() => { document.querySelectorAll('.ghost-cal').forEach(el => el.remove()); }, 300);
+                    setTimeout(() => { document.querySelectorAll('.ghost-cal').forEach(el => el.remove()); }, 350);
                 }
             });
         }
