@@ -12,7 +12,6 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
     
     <style>
-        /* --- 徹底還原完美無留白佈局，並將底色轉為金黃色 --- */
         html { 
             background-color: var(--bg-color); 
             width: 100vw; 
@@ -62,7 +61,6 @@
         .google-btn img { width: 24px; height: 24px; }
         [data-theme="dark"] .google-btn { background-color: #333; color: #fff; border-color: #555; }
 
-        /* --- 系統狀態提示浮窗 (Toast) --- */
         #toast-container {
             position: fixed;
             top: max(20px, env(safe-area-inset-top));
@@ -81,14 +79,13 @@
             pointer-events: none;
         }
 
-        /* --- 強制登入畫面 --- */
         #login-screen {
             position: fixed;
             top: 0; left: 0;
             width: 100vw; height: 100dvh;
             background-color: var(--bg-color);
             z-index: 99999;
-            display: flex; /* 預設顯示，強制登入 */
+            display: flex; /* 嚴禁本地儲存，強制顯示登入畫面 */
             flex-direction: column;
             align-items: center;
             justify-content: center;
@@ -97,7 +94,6 @@
         .login-title { font-size: 32px; font-weight: 900; color: var(--text-main); margin-bottom: 12px; }
         .login-subtitle { font-size: 16px; font-weight: bold; color: var(--text-sub); margin-bottom: 40px; }
 
-        /* --- 頂部導覽列功能鈕 --- */
         .top-action-bar { flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 12px 20px; background: var(--card-bg); border-bottom: 1px solid var(--border-color); }
         .left-btns { display: flex; gap: 8px; align-items: center; }
         .capsule-btn { background: #000000; color: #ffffff; border: none; padding: 6px 16px; border-radius: 20px; font-size: 14px; font-weight: bold; min-height: 36px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
@@ -107,7 +103,6 @@
         .triangle-down { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--text-main); display: inline-block; }
         .nav-btn { background: var(--nav-btn-bg); border: none; padding: 0 12px; border-radius: 20px; font-size: 13px; font-weight: bold; color: var(--nav-btn-text); display: flex; align-items: center; justify-content: center; min-height: 44px; }
 
-        /* --- 設定側邊欄 --- */
         .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: rgba(0,0,0,0.5); z-index: 9998; opacity: 0; pointer-events: none; transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: opacity; }
         .sidebar-overlay.active { opacity: 1; pointer-events: auto; }
         
@@ -121,7 +116,6 @@
         .settings-label { font-size: 13px; font-weight: bold; color: var(--text-sub); margin-bottom: 4px; }
         .settings-action-btn { background: var(--nav-btn-bg); color: var(--text-main); border: 2px solid var(--border-color); padding: 14px 16px; border-radius: 12px; font-size: 16px; font-weight: bold; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 10px; min-height: 44px;}
 
-        /* --- 固定中間圓餅圖看板 --- */
         .header-dashboard { flex-shrink: 0; background: var(--card-bg); padding: 12px 20px 16px 20px; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; box-shadow: 0 8px 20px rgba(0,0,0,0.04); text-align: center; z-index: 10; margin-bottom: 0; touch-action: pan-y; }
         #chart-swipe-track { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; will-change: transform; }
         .chart-container { position: relative; width: 240px; height: 240px; margin: 0 auto; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -131,7 +125,6 @@
         .chart-center-text .title { font-size: 11px; color: var(--text-sub); font-weight: bold; margin-bottom: 1px; }
         .chart-center-text .balance { font-size: 14px; font-weight: 800; color: var(--text-main); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-        /* --- 歷史明細容器區 --- */
         .container { flex: 1; padding: 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
         .history-container { width: 100%; } 
         .empty-state-wrapper { display: flex; flex-direction: column; align-items: center; padding-top: 60px; color: var(--text-sub); }
@@ -165,7 +158,6 @@
         .list-action-delete-btn { background: #fff5f5; color: #ff5b5b; border: 1.5px solid #ff5b5b; font-size: 12px; font-weight: bold; padding: 6px 12px; border-radius: 8px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
         [data-theme="dark"] .list-action-delete-btn { background: #2c1919; color: #ff8787; border-color: #ff8787; }
 
-        /* --- 彈窗與計算機 --- */
         .month-grid-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 8px 4px; }
         .month-cell-btn { height: 54px; border: 2px solid var(--border-color); background: var(--card-bg); border-radius: var(--radius-sub); font-size: 15px; font-weight: bold; color: var(--text-main); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }
         .month-cell-btn.active { background: var(--primary-color); border-color: var(--primary-color); color: #ffffff; box-shadow: 0 4px 12px rgba(74, 179, 227, 0.25); }
@@ -199,7 +191,6 @@
         .modal-title { font-size: 17px; font-weight: 800; color: var(--text-main); }
         .modal-close { font-size: 20px; color: var(--text-sub); background: none; border: none; padding: 4px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center;}
         
-        /* 🚨 將輸入框改為「偽裝按鈕」，不會觸發 HTML 輸入法焦點 */
         .input-ctrl { 
             width: 100%; 
             height: 46px; 
@@ -479,9 +470,10 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
+        // 🚨 修正：使用確實存在的穩定版本 Firebase SDK (10.12.0)
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -545,7 +537,7 @@
                 logoutBtn.style.display = 'none';
                 loginBtn.style.display = 'flex';
                 
-                window.records = []; // 清空資料
+                window.records = []; // 嚴禁本地讀取，直接清空
                 if (typeof window.syncHeaderDisplay === 'function') {
                     window.syncHeaderDisplay();
                 }
@@ -555,9 +547,8 @@
         function startDatabaseSync() {
             if (!recordsRef) return;
             
-            showToast("⏳ 正在同步雲端資料...");
+            showToast("⏳ 正在讀取雲端資料...");
             
-            // 監聽 Firebase 資料庫變化，覆蓋現有畫面
             onValue(recordsRef, (snapshot) => {
                 const data = snapshot.val();
                 let cloudRecords = [];
@@ -566,9 +557,9 @@
                     cloudRecords = cloudRecords.filter(r => r !== null);
                 }
 
-                // 🌟 純雲端模式：直接使用雲端資料，唔做本地合併
+                // 🌟 純雲端模式：直接覆蓋畫面，唔做本地合併
                 window.records = cloudRecords.sort((a, b) => b.id - a.id);
-                showToast("✅ 雲端同步完成！");
+                showToast(`✅ 雲端資料載入成功！(${window.records.length} 筆)`);
 
                 if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
                 if (document.getElementById('calendarModal') && document.getElementById('calendarModal').classList.contains('active')) {
@@ -576,27 +567,33 @@
                     if (typeof window.renderModalDateRecords === 'function') window.renderModalDateRecords();
                 }
             }, (error) => {
-                showToast("❌ 雲端同步失敗：" + error.message, 5000);
+                console.error("Firebase Read Error:", error);
                 if (error.code === 'PERMISSION_DENIED') {
-                    document.getElementById('sidebar-auth-status').innerText = '帳號無權限，請確認資料庫規則';
-                    alert("⚠️ Firebase 權限被拒絕！\n請至 Firebase 後台確認您是否在白名單內。");
+                    let currentEmail = auth.currentUser ? auth.currentUser.email : '未知';
+                    document.getElementById('sidebar-auth-status').innerText = '無權限存取 (被白名單阻擋)';
+                    alert(`⚠️ Firebase 權限被拒絕！\n\n您的登入 Email 是：\n【 ${currentEmail} 】\n\n請去 Firebase 後台確認這個 Email 已經加入 whitelist 節點，並且將「.」換成「,」。`);
+                } else {
+                    showToast("❌ 讀取失敗：" + error.message, 5000);
                 }
             });
         }
 
         window.saveToFirebase = function(recordsArray) {
-            // 🌟 純雲端模式：移除所有 localStorage，直接上傳 Firebase
+            // 🌟 純雲端模式：移除所有 localStorage 寫入，直接上傳 Firebase
             if (auth.currentUser && navigator.onLine !== false && recordsRef) {
                 set(recordsRef, recordsArray)
                     .then(() => showToast("☁️ 資料已儲存至雲端"))
                     .catch(error => {
-                        showToast("❌ 雲端儲存失敗：" + error.message, 5000);
+                        console.error("Firebase Write Error:", error);
                         if(error.code === 'PERMISSION_DENIED') {
-                            alert("Firebase 權限不足，請確定您在白名單內。");
+                            let currentEmail = auth.currentUser ? auth.currentUser.email : '未知';
+                            alert(`⚠️ 寫入權限不足！\n\n您的登入 Email 是：\n【 ${currentEmail} 】\n\n請確認白名單設定正確。`);
+                        } else {
+                            showToast("❌ 雲端儲存失敗：" + error.message, 5000);
                         }
                     });
             } else {
-                showToast("❌ 雲端儲存失敗：請檢查網路或登入狀態", 5000);
+                showToast("❌ 無法連線至雲端，儲存失敗", 4000);
             }
         };
     </script>
