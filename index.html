@@ -38,6 +38,7 @@
             --calc-bg: #25211e; --calc-btn-num: #3a3532; --calc-btn-op: #5c4d4a; --calc-btn-eq: #b39224; --calc-text: #f5f5f7;
         }
 
+        /* 放慢基礎過渡效果至 0.5s */
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; transition: background-color 0.5s, border-color 0.5s, color 0.5s; }
         input, textarea, select { user-select: text; -webkit-user-select: text; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         
@@ -123,7 +124,6 @@
         [data-theme="dark"] .item-icon { background: #233540; border-color: #ffffff; }
         .item-info { display: flex; flex-direction: column; }
         .item-category { font-size: 15px; font-weight: bold; color: var(--text-main); }
-        .item-diary { font-size: 12px; color: var(--text-sub); margin-top: 3px; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .item-right-action-wrapper { display: flex; align-items: center; gap: 12px; }
         .item-amount-box { display: flex; flex-direction: column; align-items: flex-end; }
         .item-amount { font-size: 16px; font-weight: bold; color: var(--text-main); }
@@ -356,11 +356,6 @@
             </div>
             
             <div class="record-cat-grid" id="record-cat-grid"></div>
-            
-            <div style="display: flex; flex-direction: column; gap: 6px;">
-                <label style="font-size:13px; font-weight:bold; color:var(--text-sub);">備忘日記</label>
-                <input type="text" id="record-diary" class="input-ctrl" placeholder="寫點備忘心情吧...">
-            </div>
         </div>
 
         <div class="record-bottom-calc-area">
@@ -530,7 +525,7 @@
         let selectedDateStr = '2026-06-09'; 
         let animationProgress = 0;
         let chartAnimationFrameId = null;
-        let recordState = { mode: 'add', id: null, type: 'expense', category: '', date: new Date(), expression: '', amount: 0, diary: '' };
+        let recordState = { mode: 'add', id: null, type: 'expense', category: '', date: new Date(), expression: '', amount: 0 };
 
         let coinsArray = [];
         let globalTotalIncome = 0; 
@@ -569,18 +564,6 @@
                     renderModalDateRecords();
                 }
             });
-
-            // --- 新增：修復鍵盤收起後的留白問題 ---
-            const diaryInput = document.getElementById('record-diary');
-            if (diaryInput) {
-                diaryInput.addEventListener('blur', function() {
-                    // 稍微延遲以確保鍵盤完全收合後再執行重置，以發揮最大效果
-                    setTimeout(() => {
-                        window.scrollTo(0, 0);
-                        document.body.scrollTop = 0;
-                    }, 100);
-                });
-            }
         };
 
         function syncHeaderDisplay() {
@@ -937,8 +920,8 @@
             });
         }
 
-        function executeAdd(amount, category, date, diary, forcedType) {
-            const newR = { id: Date.now(), type: forcedType, amount: amount, category: category, date: date, diary: diary };
+        function executeAdd(amount, category, date, forcedType) {
+            const newR = { id: Date.now(), type: forcedType, amount: amount, category: category, date: date };
             records.unshift(newR); 
             if (window.saveToFirebase) window.saveToFirebase(records);
             const recordDate = new Date(date); currentSelectedYear = recordDate.getFullYear(); currentSelectedMonth = recordDate.getMonth();
@@ -998,16 +981,16 @@
         }
 
         function openAddModal() {
-            recordState.mode = 'add'; recordState.id = Date.now(); recordState.type = 'expense'; recordState.category = categories['expense'][0]; recordState.date = new Date(selectedDateStr || new Date().toISOString().split('T')[0]); recordState.expression = ''; recordState.amount = 0; recordState.diary = '';
-            document.getElementById('record-modal-title').innerText = '新增帳目'; document.getElementById('record-delete-btn').style.display = 'none'; document.getElementById('record-diary').value = ''; document.getElementById('record-amount').innerText = '0';
+            recordState.mode = 'add'; recordState.id = Date.now(); recordState.type = 'expense'; recordState.category = categories['expense'][0]; recordState.date = new Date(selectedDateStr || new Date().toISOString().split('T')[0]); recordState.expression = ''; recordState.amount = 0;
+            document.getElementById('record-modal-title').innerText = '新增帳目'; document.getElementById('record-delete-btn').style.display = 'none'; document.getElementById('record-amount').innerText = '0';
             setRecordType('expense', true); updateRecordDateDisplay(); toggleCalcDrawer('expand'); document.getElementById('recordModal').classList.add('active');
         }
 
         function openRecordModal(id) {
             const record = records.find(r => r.id === id); if (!record) return;
-            recordState.mode = 'edit'; recordState.id = record.id; recordState.type = record.type; recordState.category = record.category; recordState.date = new Date(record.date); recordState.expression = ''; recordState.amount = record.amount; recordState.diary = record.diary || '';
+            recordState.mode = 'edit'; recordState.id = record.id; recordState.type = record.type; recordState.category = record.category; recordState.date = new Date(record.date); recordState.expression = ''; recordState.amount = record.amount;
             if (recordState.category.includes('其他')) { selectedCustomIconRecord = recordState.category.split(' ')[0] || '🎨'; }
-            document.getElementById('record-modal-title').innerText = '修改帳目'; document.getElementById('record-delete-btn').style.display = 'block'; document.getElementById('record-diary').value = recordState.diary; document.getElementById('record-amount').innerText = recordState.amount;
+            document.getElementById('record-modal-title').innerText = '修改帳目'; document.getElementById('record-delete-btn').style.display = 'block'; document.getElementById('record-amount').innerText = recordState.amount;
             setRecordType(recordState.type, false); updateRecordDateDisplay(); toggleCalcDrawer('expand'); document.getElementById('recordModal').classList.add('active');
         }
 
@@ -1050,14 +1033,14 @@
                 let finalAmt = parseFloat(mainDisp.innerText);
                 if (recordState.expression) { try { let s = recordState.expression.replace(/×/g, '*').replace(/÷/g, '/'); let f = eval(s); if (!isNaN(f) && isFinite(f)) finalAmt = f; } catch (e) {} }
                 finalAmt = Math.round(finalAmt * 100) / 100; if (finalAmt <= 0) { alert('請輸入有效金額！'); return; }
-                const year = recordState.date.getFullYear(); const month = String(recordState.date.getMonth() + 1).padStart(2, '0'); const day = String(recordState.date.getDate()).padStart(2, '0'); const dateStr = `${year}-${month}-${day}`; const newDiary = document.getElementById('record-diary').value.trim();
+                const year = recordState.date.getFullYear(); const month = String(recordState.date.getMonth() + 1).padStart(2, '0'); const day = String(recordState.date.getDate()).padStart(2, '0'); const dateStr = `${year}-${month}-${day}`; 
                 
                 if (recordState.mode === 'add') {
-                    executeAdd(finalAmt, recordState.category, dateStr, newDiary, recordState.type);
+                    executeAdd(finalAmt, recordState.category, dateStr, recordState.type);
                 } else {
                     const index = records.findIndex(r => r.id === recordState.id);
                     if (index !== -1) {
-                        records[index] = { id: recordState.id, type: recordState.type, amount: finalAmt, category: recordState.category, date: dateStr, diary: newDiary };
+                        records[index] = { id: recordState.id, type: recordState.type, amount: finalAmt, category: recordState.category, date: dateStr };
                         if (window.saveToFirebase) window.saveToFirebase(records);
                         currentSelectedYear = year; currentSelectedMonth = recordState.date.getMonth(); viewMode = 'month';
                         syncHeaderDisplay();
@@ -1092,7 +1075,7 @@
                     const itemDiv = document.createElement('div'); itemDiv.className = 'history-item'; itemDiv.onclick = () => openRecordModal(item.id);
                     const icon = item.category.split(' ')[0] || '📝'; const name = item.category.substring(icon.length).trim() || item.category;
                     itemDiv.innerHTML = `
-                        <div class="item-left"><div class="item-icon">${icon}</div><div class="item-info"><span class="item-category">${name}</span>${item.diary ? `<span class="item-diary">${item.diary}</span>` : ''}</div></div>
+                        <div class="item-left"><div class="item-icon">${icon}</div><div class="item-info"><span class="item-category">${name}</span></div></div>
                         <div class="item-right-action-wrapper"><div class="item-amount-box"><span class="item-amount" style="color: ${item.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)'}">${item.type === 'income' ? '+' : '-'}$${item.amount.toLocaleString()}</span></div><button class="list-action-delete-btn" onclick="event.stopPropagation(); openDeleteModal(${item.id})">刪除</button></div>
                     `;
                     dateGroupDiv.appendChild(itemDiv);
