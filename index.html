@@ -544,12 +544,14 @@
                 logoutBtn.style.display = 'flex';
                 loginBtn.style.display = 'none';
                 
-                recordsRef = ref(db, 'users/' + user.uid + '/records');
+                // ⚠️ 修正：改回共用資料庫路徑，配合家庭記帳
+                recordsRef = ref(db, 'records');
+
+                // ⚠️ 關鍵：不管雲端點樣，先載入 Local Data 顯示畫面，避免空白！
+                loadLocalData();
 
                 if (!window.isLocalMode) {
                     startDatabaseSync();
-                } else {
-                    loadLocalData();
                 }
             } else {
                 statusText.innerText = '尚未登入 (雲端已暫停)';
@@ -626,7 +628,7 @@
                 showToast("❌ 雲端同步失敗：" + error.message, 5000);
                 if (error.code === 'PERMISSION_DENIED') {
                     document.getElementById('sidebar-auth-status').innerText = '帳號無權限，請確認資料庫規則';
-                    alert("⚠️ Firebase 權限被拒絕！\n請至 Firebase 後台修改 Realtime Database 的規則 (Rules)，確保允許讀寫。");
+                    alert("⚠️ Firebase 權限被拒絕！\n請至 Firebase 後台修改 Realtime Database 的規則 (Rules)，確保允許白名單讀寫。");
                 }
             });
         }
@@ -673,7 +675,6 @@
 
         window.addEventListener('load', function() {
             setTimeout(function() { window.scrollTo(0, 1); }, 0);
-            // 🚨 修正核心：不管 Firebase 有沒有連上，先強制渲染月份與現有資料！
             syncHeaderDisplay();
         });
 
@@ -703,7 +704,7 @@
 
         const categories = {
             expense: ['🍔 餐飲飲食', '🚌 交通出行', '🛍️ 購物消費', '🏠 房租', '🎬 娛樂生活', '💡 固網水電', '🩺 醫療健康', '👗 服飾鞋包', '🛒 居家百貨', '📚 進修學習', '🤝 社交交際', '✨ 美容保養', '🐾 寵物花費', '🏋️ 運動健身', '🎨 其他'],
-            income: ['💼 薪資收入', '📈 投資理財', '🎁 收到紅包', '💻 兼職副業', '💰 獎金補貼', '🤝 經營分紅', '📦 網拍二手', '♻️ 其它收入', '🎨 其他']
+            income: ['💼 薪薪收入', '📈 投資理財', '🎁 收到紅包', '💻 兼職副業', '💰 獎金補貼', '🤝 經營分紅', '📦 網拍二手', '♻️ 其它收入', '🎨 其他']
         };
 
         const monsterEmojiList = [
@@ -747,7 +748,6 @@
             initChartSwipe();
             initCalendarSwipe();
             
-            // 確保一開始就有畫面
             syncHeaderDisplay();
             
             document.getElementById('cal-swipe-track').addEventListener('click', function(e) {
