@@ -105,7 +105,6 @@
         }
         [data-theme="dark"] #connection-dot { background-color: #2c2c2e; color: #ccc; }
 
-        /* 🔥 修復頂部選單，與下方圖表面板無縫接合 🔥 */
         .top-action-bar { flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 0 20px; background: var(--card-bg); border-bottom: none; z-index: 10; position: relative; }
         .left-btns { display: flex; gap: 8px; align-items: center; width: 44px; }
         .right-btns { display: flex; gap: 8px; align-items: center; justify-content: flex-end; width: 44px; }
@@ -129,8 +128,8 @@
         .settings-label { font-size: 13px; font-weight: bold; color: var(--text-sub); margin-bottom: 4px; }
         .settings-action-btn { background: var(--nav-btn-bg); color: var(--text-main); border: 2px solid var(--border-color); padding: 14px 16px; border-radius: 12px; font-size: 16px; font-weight: bold; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 10px; min-height: 44px;}
 
-        /* 🔥 美化版圖表面板：寬度100vw，無左右邊距，無縫連接滑動區 🔥 */
-        .header-dashboard { flex-shrink: 0; background: var(--card-bg); padding: 8px 20px 20px 20px; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; border-bottom: 2px solid var(--text-main); box-shadow: 0 6px 0 var(--text-main); text-align: center; z-index: 10; margin: 0; touch-action: pan-y; position: relative; overflow: hidden; width: 100vw; }
+        /* 🔥 美化版圖表面板：新增頂部邊框，完美計數機立體風格 🔥 */
+        .header-dashboard { flex-shrink: 0; background: var(--card-bg); padding: 8px 20px 20px 20px; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; border-bottom: 2px solid var(--text-main); border-top: 2px solid var(--text-main); box-shadow: 0 6px 0 var(--text-main); text-align: center; z-index: 10; margin: 0; touch-action: pan-y; position: relative; overflow: hidden; width: 100vw; }
         #chart-swipe-track { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; will-change: transform; }
         .chart-container { position: relative; width: 240px; height: 240px; margin: 0 auto; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
         #pieChart { width: 240px; height: 240px; display: block; }
@@ -510,7 +509,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -574,7 +573,7 @@
         window.signOutGoogle = function() {
             if(auth.currentUser) {
                 const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
-                localStorage.removeItem('records_' + emailKey);
+                try { localStorage.removeItem('records_' + emailKey); } catch(e){}
             }
             signOut(auth).then(() => location.reload());
         };
@@ -599,30 +598,29 @@
                 mainLoginBtn.style.display = 'none';
                 
                 const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
-                set(sessionRef, mySessionId);
+                set(sessionRef, mySessionId).catch(e => console.warn(e));
                 onValue(sessionRef, (snap) => {
                     const activeSession = snap.val();
                     if (activeSession && activeSession !== mySessionId) {
                         showToast('⚠️ 已在其他裝置/瀏覽器登入，您被迫登出！', 4000);
                         setTimeout(() => {
                             if(auth.currentUser) {
-                                localStorage.removeItem('records_' + emailKey);
+                                try { localStorage.removeItem('records_' + emailKey); } catch(e){}
                             }
                             signOut(auth).then(() => location.reload());
                         }, 2500);
                     }
                 });
 
-                const localData = localStorage.getItem('records_' + emailKey);
-                if (localData) {
-                    try {
+                try {
+                    const localData = localStorage.getItem('records_' + emailKey);
+                    if (localData) {
                         window.records = JSON.parse(localData);
                         loginScreen.style.display = 'none';
                         if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
-                    } catch(e) {
-                        console.error("Local Storage parse error", e);
-                        localStorage.removeItem('records_' + emailKey);
                     }
+                } catch(e) {
+                    console.error("Local Storage parse error", e);
                 }
 
                 try {
@@ -647,22 +645,22 @@
             }
         });
 
+        // 🔥 使用 HTTP Get + WebSocket 雙重防護，防止 Safari 卡死
         function startDatabaseSync(emailKey) {
             if (!recordsRef) return;
             
-            onValue(recordsRef, (snapshot) => {
-                const errorMsg = document.getElementById('login-error-msg');
-                errorMsg.innerText = "📥 正在處理雲端下載嘅資料...";
+            const errorMsg = document.getElementById('login-error-msg');
+            errorMsg.innerText = "📥 正在請求雲端資料...";
 
+            function handleData(data) {
                 try {
-                    const data = snapshot.val();
                     let cloudRecords = [];
                     if (data) {
                         cloudRecords = Object.values(data).filter(r => r !== null && typeof r === 'object' && r.id);
                     }
-
                     window.records = cloudRecords.sort((a, b) => (b.id || 0) - (a.id || 0));
-                    localStorage.setItem('records_' + emailKey, JSON.stringify(window.records));
+                    
+                    try { localStorage.setItem('records_' + emailKey, JSON.stringify(window.records)); } catch(e) {}
 
                     document.getElementById('login-screen').style.display = 'none';
 
@@ -673,15 +671,16 @@
                     }
                 } catch(err) {
                     console.error(err);
-                    document.getElementById('login-error-msg').innerText = "❌ 處理雲端資料時出錯：\n" + err.message;
-                    document.getElementById('login-error-msg').style.color = "#ff5b5b";
+                    errorMsg.innerText = "❌ 處理雲端資料時出錯：\n" + err.message;
+                    errorMsg.style.color = "#ff5b5b";
                     document.getElementById('main-login-btn').style.display = 'flex';
                 }
+            }
 
-            }, (error) => {
+            function handleAuthError(error) {
                 console.error("Firebase Read Error:", error);
                 if (error.code === 'PERMISSION_DENIED') {
-                    localStorage.removeItem('records_' + emailKey);
+                    try { localStorage.removeItem('records_' + emailKey); } catch(e){}
                     window.records = [];
                     if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
                     
@@ -692,31 +691,35 @@
                     loginScreen.style.display = 'flex';
                     document.getElementById('main-login-btn').style.display = 'flex';
                     
-                    const msgEl = document.getElementById('login-error-msg');
-                    msgEl.innerText = `⚠️ 權限不足！\n你的 Email:\n【${currentEmail}】\n未被加入白名單，無法進入首頁。`;
-                    msgEl.style.color = "#ff5b5b";
-                    msgEl.style.display = 'block';
+                    errorMsg.innerText = `⚠️ 權限不足！\n你的 Email:\n【${currentEmail}】\n未被加入白名單，無法進入首頁。`;
+                    errorMsg.style.color = "#ff5b5b";
+                    errorMsg.style.display = 'block';
                     
                     signOut(auth); 
                 } else {
-                    document.getElementById('login-error-msg').innerText = "❌ 讀取失敗：" + error.message;
-                    document.getElementById('login-error-msg').style.color = "#ff5b5b";
+                    errorMsg.innerText = "❌ 讀取失敗：" + error.message;
+                    errorMsg.style.color = "#ff5b5b";
                     document.getElementById('main-login-btn').style.display = 'flex';
                 }
+            }
+
+            // 強制 Get 一次防卡死，然後掛載實時監聽
+            get(recordsRef).then((snapshot) => {
+                handleData(snapshot.val());
+                onValue(recordsRef, (snap) => handleData(snap.val()), (err) => handleAuthError(err));
+            }).catch((error) => {
+                handleAuthError(error);
             });
         }
 
         window.saveData = function(recordsArray) {
             if (auth.currentUser) {
                 const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
-                localStorage.setItem('records_' + emailKey, JSON.stringify(recordsArray));
+                try { localStorage.setItem('records_' + emailKey, JSON.stringify(recordsArray)); } catch(e){}
                 
                 if (navigator.onLine !== false && recordsRef) {
                     let recordsObj = {};
-                    recordsArray.forEach(record => {
-                        recordsObj[record.id] = record;
-                    });
-
+                    recordsArray.forEach(record => { recordsObj[record.id] = record; });
                     set(recordsRef, recordsObj)
                         .then(() => showToast("☁️ 雲端同步成功！"))
                         .catch(error => {
@@ -750,7 +753,6 @@
             setTimeout(function() { window.scrollTo(0, 1); }, 0);
             if (!window.records) window.records = [];
             
-            // 🔥 手動初始化一次 UI 顯示
             document.getElementById('current-display-month-label').innerText = `${currentSelectedYear}年 ${currentSelectedMonth + 1}月`;
             document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
             syncHeaderDisplay();
@@ -920,9 +922,9 @@
                 swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)'; swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
                 setTimeout(() => {
                     if (direction === 1) { 
-                        currentSelectedMonth++; if (currentSelectedMonth > 11) { currentSelectedMonth = 0; currentSelectedYear++; } 
-                    } else { 
                         currentSelectedMonth--; if (currentSelectedMonth < 0) { currentSelectedMonth = 11; currentSelectedYear--; } 
+                    } else { 
+                        currentSelectedMonth++; if (currentSelectedMonth > 11) { currentSelectedMonth = 0; currentSelectedYear++; } 
                     }
                     swipeTarget.style.transition = 'none'; 
                     swipeTarget.style.transform = `translateX(0)`; 
