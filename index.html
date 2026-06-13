@@ -94,10 +94,9 @@
         .login-title { font-size: 32px; font-weight: 900; color: var(--text-main); margin-bottom: 12px; }
         .login-subtitle { font-size: 16px; font-weight: bold; color: var(--text-sub); margin-bottom: 40px; }
 
-        /* 🔵 移入設定的連線狀態標籤 */
         #connection-dot {
-            font-size: 14px; font-weight: 800; padding: 12px 16px; border-radius: 12px;
-            display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+            font-size: 13px; font-weight: 800; padding: 4px 12px; border-radius: 12px;
+            display: flex; align-items: center; gap: 6px; margin-bottom: 0;
             background-color: #e0e0e0; color: #555555; border: 2px solid transparent;
         }
         [data-theme="dark"] #connection-dot { background-color: #2c2c2e; color: #ccc; }
@@ -293,8 +292,8 @@
                 <button class="settings-action-btn" onclick="toggleTheme()" id="sidebar-theme-btn">☀️ 明亮模式</button>
             </div>
 
-            <div class="settings-group" style="margin-top: 8px;">
-                <span class="settings-label">系統連線狀態</span>
+            <div class="settings-group" style="flex-direction: row; justify-content: space-between; align-items: center; margin-top: 8px;">
+                <span class="settings-label" style="margin-bottom: 0;">系統連線狀態</span>
                 <div id="connection-dot"><span>⏳</span> 偵測中...</div>
             </div>
 
@@ -357,13 +356,11 @@
 
     <div class="modal-overlay" id="calendarModal" onclick="closeCalendarModal(event)">
         <div class="modal-sheet calendar-sheet" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <button class="cal-ctrl-btn nav-btn" onclick="adjustCalendarMonth(-1)">◀ 前月</button>
-                    <span id="cal-month-title" style="font-weight:900; font-size:17px; color:var(--text-main); margin:0 4px;">加載中...</span>
-                    <button class="cal-ctrl-btn nav-btn" onclick="adjustCalendarMonth(1)">後月 ▶</button>
-                </div>
-                <button class="modal-close" onclick="closeCalendarModal(null)">
+            <div class="modal-header" style="display: flex; gap: 8px; align-items: center;">
+                <button class="cal-ctrl-btn nav-btn" onclick="adjustCalendarMonth(-1)" style="min-width: 44px; padding: 0;">◀</button>
+                <span id="cal-month-title" style="font-weight:900; font-size:17px; color:var(--text-main); flex: 1; text-align: center;">加載中...</span>
+                <button class="cal-ctrl-btn nav-btn" onclick="adjustCalendarMonth(1)" style="min-width: 44px; padding: 0;">▶</button>
+                <button class="modal-close" onclick="closeCalendarModal(null)" style="margin-left: 8px;">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v9h9"></path><circle cx="12" cy="12" r="3.5" fill="var(--card-bg)" stroke="currentColor"></circle></svg>
                 </button>
             </div>
@@ -512,7 +509,6 @@
             setTimeout(() => { toast.style.display = 'none'; }, duration);
         };
 
-        // 🔵 移至設定內的實時監聽 (色弱友善版：只依賴符號及藍/灰高對比)
         const connRef = ref(db, ".info/connected");
         onValue(connRef, (snap) => {
            const dot = document.getElementById('connection-dot');
@@ -556,7 +552,8 @@
                 logoutBtn.style.display = 'flex';
                 loginBtn.style.display = 'none';
                 
-                recordsRef = ref(db, 'records');
+                // 🚀 已分開帳號：每個人嘅資料會獨立儲存喺 users/自己嘅UID/records
+                recordsRef = ref(db, 'users/' + user.uid + '/records');
                 startDatabaseSync(); 
             } else {
                 loginScreen.style.display = 'flex';
@@ -580,11 +577,9 @@
                 const data = snapshot.val();
                 let cloudRecords = [];
                 if (data) {
-                    // 🌟 陣列 Bug 修復：將 Object 轉回 Array，濾除 null
                     cloudRecords = Object.values(data).filter(r => r !== null);
                 }
 
-                // 🌟 純雲端模式：直接覆蓋畫面
                 window.records = cloudRecords.sort((a, b) => b.id - a.id);
                 showToast(`☁️ 成功讀取 ${window.records.length} 筆資料！`);
 
@@ -601,14 +596,11 @@
 
         window.saveToFirebase = function(recordsArray) {
             if (auth.currentUser && navigator.onLine !== false && recordsRef) {
-                
-                // 🌟 終極修復：將 Array 轉成 Object (Dictionary)，徹底解決 Firebase 陣列留白 Bug
                 let recordsObj = {};
                 recordsArray.forEach(record => {
                     recordsObj[record.id] = record;
                 });
 
-                // 儲存 Object 而不是 Array
                 set(recordsRef, recordsObj)
                     .then(() => showToast("☁️ 資料已成功寫入雲端！"))
                     .catch(error => {
@@ -669,7 +661,7 @@
         let pendingDeleteId = null; 
         let animationProgress = 0;
         let chartAnimationFrameId = null;
-        let recordState = { mode: 'add', id: null, type: 'expense', category: '', date: new Date(), expression: '', amount: 0, diary: '' };
+        let recordState = { mode: 'add', id: null, type: 'income', category: '', date: new Date(), expression: '', amount: 0, diary: '' };
 
         let coinsArray = [];
         let globalTotalIncome = 0; 
@@ -1167,7 +1159,8 @@
             const _td = new Date();
             const _tdStr = `${_td.getFullYear()}-${String(_td.getMonth() + 1).padStart(2, '0')}-${String(_td.getDate()).padStart(2, '0')}`;
             
-            recordState.mode = 'add'; recordState.id = Date.now(); recordState.type = 'expense'; recordState.category = categories['expense'][0]; recordState.date = new Date(_tdStr); recordState.expression = ''; recordState.amount = 0; recordState.diary = '';
+            // 🌟 將預設類型改為 'income' (收入)
+            recordState.mode = 'add'; recordState.id = Date.now(); recordState.type = 'income'; recordState.category = categories['income'][0]; recordState.date = new Date(_tdStr); recordState.expression = ''; recordState.amount = 0; recordState.diary = '';
             selectedCustomIconRecord = '🎨';
             document.getElementById('record-modal-title').innerText = '新增帳目'; document.getElementById('record-delete-btn').style.display = 'none'; document.getElementById('record-amount').innerText = '0';
             
@@ -1176,7 +1169,7 @@
             document.getElementById('record-custom-name-display').innerText = '輸入自訂分類名稱...';
             document.getElementById('record-custom-name-display').style.color = 'var(--text-sub)';
 
-            setRecordType('expense', true); updateRecordDateDisplay(); toggleCalcDrawer('expand'); document.getElementById('recordModal').classList.add('active');
+            setRecordType('income', true); updateRecordDateDisplay(); toggleCalcDrawer('expand'); document.getElementById('recordModal').classList.add('active');
         }
 
         function openRecordModal(id) {
