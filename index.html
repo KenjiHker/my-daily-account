@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>家庭記帳日記 - 專屬雲端版</title>
+    <title>家庭記帳日記 - 本地雲端同步版</title>
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -12,7 +12,6 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
     
     <style>
-        /* --- 徹底還原完美無留白佈局，並將底色轉為金黃色 --- */
         html { 
             background-color: var(--bg-color); 
             width: 100vw; 
@@ -92,8 +91,7 @@
             justify-content: center;
             padding: 20px;
         }
-        .login-title { font-size: 32px; font-weight: 900; color: var(--text-main); margin-bottom: 12px; }
-        .login-subtitle { font-size: 16px; font-weight: bold; color: var(--text-sub); margin-bottom: 40px; }
+        .login-title { font-size: 32px; font-weight: 900; color: var(--text-main); margin-bottom: 40px; } /* 調整了下邊距替代被移除的文字空間 */
 
         #connection-dot {
             font-size: 14px; font-weight: 800; padding: 12px 16px; border-radius: 12px;
@@ -274,7 +272,6 @@
 
     <div id="login-screen">
         <h1 class="login-title">家庭記帳日記</h1>
-        <p class="login-subtitle">純雲端版，請先登入</p>
         <button class="google-btn" onclick="signInWithGoogle()" style="width: 80%; max-width: 320px; height: 50px;">
             <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google"> 授權 Google 帳號登入
         </button>
@@ -538,6 +535,11 @@
         };
 
         window.signOutGoogle = function() {
+            // 登出時順便清除手機快取
+            if(auth.currentUser) {
+                const emailKey = auth.currentUser.email.replace(/\./g, ',');
+                localStorage.removeItem('records_' + emailKey);
+            }
             signOut(auth).then(() => location.reload());
         };
 
@@ -548,16 +550,28 @@
             const loginBtn = document.getElementById('sidebar-google-login-btn');
 
             if (user) {
-                document.getElementById('login-error-msg').innerText = "⏳ 正在驗證白名單權限...";
-                document.getElementById('login-error-msg').style.color = "var(--text-sub)";
-                document.getElementById('login-error-msg').style.display = 'block';
-
+                const emailKey = user.email.replace(/\./g, ',');
                 statusText.innerText = `已登入:\n${user.email}`;
                 logoutBtn.style.display = 'flex';
                 loginBtn.style.display = 'none';
                 
-                recordsRef = ref(db, 'users/' + user.email.replace(/\./g, ',') + '/records');
-                startDatabaseSync(); 
+                recordsRef = ref(db, 'users/' + emailKey + '/records');
+                
+                // 🌟 1. 【本地優先】第一時間從本地快取撈資料，實現「免等秒進首頁」
+                const localData = localStorage.getItem('records_' + emailKey);
+                if (localData) {
+                    window.records = JSON.parse(localData);
+                    loginScreen.style.display = 'none'; // 🚀 0秒直接跳過登入頁面
+                    if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
+                } else {
+                    // 如果這部電話是第一次登入、完全無本地快取，才顯示背景同步中
+                    document.getElementById('login-error-msg').innerText = "⏳ 正在驗證權限並初次同步雲端...";
+                    document.getElementById('login-error-msg').style.color = "var(--text-sub)";
+                    document.getElementById('login-error-msg').style.display = 'block';
+                }
+                
+                // 🌟 2. 【後台同步】讓 Firebase 在背景默默同步雲端，不阻礙用戶操作
+                startDatabaseSync(emailKey); 
             } else {
                 loginScreen.style.display = 'flex';
                 statusText.innerText = '尚未登入';
@@ -571,12 +585,11 @@
             }
         });
 
-        function startDatabaseSync() {
+        function startDatabaseSync(emailKey) {
             if (!recordsRef) return;
             
-            showToast("⏳ 正在讀取雲端資料...");
-            
             onValue(recordsRef, (snapshot) => {
+                // 雲端拉到資料了，以防剛才本地快取是空的，此時解鎖
                 document.getElementById('login-screen').style.display = 'none';
 
                 const data = snapshot.val();
@@ -585,8 +598,11 @@
                     cloudRecords = Object.values(data).filter(r => r !== null);
                 }
 
+                // 排序並覆蓋最新數據
                 window.records = cloudRecords.sort((a, b) => b.id - a.id);
-                showToast(`☁️ 成功讀取 ${window.records.length} 筆資料！`);
+                
+                // 🌟 同步更新到本地儲存，確保下次開網頁擁有最新快取
+                localStorage.setItem('records_' + emailKey, JSON.stringify(window.records));
 
                 if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
                 if (document.getElementById('calendarModal') && document.getElementById('calendarModal').classList.contains('active')) {
@@ -596,6 +612,11 @@
             }, (error) => {
                 console.error("Firebase Read Error:", error);
                 if (error.code === 'PERMISSION_DENIED') {
+                    // 🚨 如果黑客或非白名單用戶登入，立刻強制粉碎本地快取並一腳踢走
+                    localStorage.removeItem('records_' + emailKey);
+                    window.records = [];
+                    if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
+
                     let currentEmail = auth.currentUser ? auth.currentUser.email : '未知';
                     document.getElementById('sidebar-auth-status').innerText = '無權限存取 (白名單阻擋)';
                     
@@ -607,7 +628,7 @@
                     msgEl.style.color = "#ff5b5b";
                     msgEl.style.display = 'block';
                 } else {
-                    showToast("❌ 讀取失敗：" + error.message, 5000);
+                    showToast("❌ 同步失敗：" + error.message, 5000);
                 }
             });
         }
@@ -619,14 +640,13 @@
                     recordsObj[record.id] = record;
                 });
 
+                // 默默直接上傳雲端，不再讓用戶做任何多餘的選擇
                 set(recordsRef, recordsObj)
-                    .then(() => showToast("☁️ 資料已成功寫入雲端！"))
+                    .then(() => showToast("☁️ 雲端同步成功！"))
                     .catch(error => {
                         console.error("Firebase Write Error:", error);
-                        showToast("❌ 雲端寫入失敗：" + error.message, 5000);
+                        showToast("❌ 雲端備份失敗：" + error.message, 5000);
                     });
-            } else {
-                showToast("❌ 無法連線至雲端，寫入失敗", 4000);
             }
         };
     </script>
@@ -673,7 +693,6 @@
         ];
 
         var records = []; 
-        let selectedCustomIconModal = '🎨';
         let selectedCustomIconRecord = '🎨';
         let pendingDeleteId = null; 
         let animationProgress = 0;
@@ -746,8 +765,8 @@
             if (income === 0 && expense === 0) {
                 ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI, true);
                 ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor;
-                ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.stroke();
-                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); ctx.stroke(); ctx.restore(); return;
+                ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); stroke();
+                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); stroke(); ctx.restore(); return;
             }
 
             const totalSum = income + expense; const expenseShare = expense / totalSum; const incomeShare = income / totalSum;
@@ -770,7 +789,7 @@
 
                 ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, outA1, outA2); ctx.arc(centerX, centerY, innerRadius, inA2, inA1, true); ctx.closePath();
                 ctx.save(); ctx.shadowColor = 'rgba(0, 0, 0, 0.08)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 6; ctx.fillStyle = faceColor; ctx.fill(); ctx.restore();
-                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
+                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; stroke(); ctx.restore();
             };
 
             if (expense > 0) drawSegment(expStart, expEnd, '#f7a3b6');
@@ -917,8 +936,8 @@
             const strokeStyleColor = getComputedStyle(document.documentElement).getPropertyValue('--black-stroke').trim() || '#222222';
             if (income === 0 && expense === 0) {
                 ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI, true);
-                ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.stroke();
-                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); ctx.stroke(); ctx.restore(); return;
+                ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); stroke();
+                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); stroke(); ctx.restore(); return;
             }
 
             const totalSum = income + expense; const expenseShare = expense / totalSum; const incomeShare = income / totalSum;
@@ -937,7 +956,7 @@
                 if (outA2 < outA1) { let m = (sAngle+eAngle)/2; outA1 = m; outA2 = m; } if (inA2 < inA1) { let m = (sAngle+eAngle)/2; inA1 = m; inA2 = m; }
                 ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, outA1, outA2); ctx.arc(centerX, centerY, innerRadius, inA2, inA1, true); ctx.closePath();
                 ctx.save(); ctx.shadowColor = 'rgba(0, 0, 0, 0.08)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 6; ctx.fillStyle = faceColor; ctx.fill(); ctx.restore();
-                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
+                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; stroke(); ctx.restore();
             };
             if (expense > 0) drawSegment(expStart, expEnd, '#f7a3b6');
             if (income > 0) drawSegment(incStart, incEnd, '#4ab3e3'); 
@@ -985,10 +1004,10 @@
                             coinCtx.save(); const thickH = 3; 
                             coinCtx.beginPath(); coinCtx.ellipse(c.x, c.y + thickH, c.w / 2, c.h / 2, 0, 0, Math.PI); coinCtx.lineTo(c.x - c.w / 2, c.y);
                             coinCtx.ellipse(c.x, c.y, c.w / 2, c.h / 2, 0, Math.PI, 0, true); coinCtx.lineTo(c.x + c.w / 2, c.y + thickH);
-                            coinCtx.fillStyle = '#d99e14'; coinCtx.fill(); coinCtx.lineWidth = 1.8; coinCtx.strokeStyle = strokeColor; coinCtx.stroke();
+                            coinCtx.fillStyle = '#d99e14'; coinCtx.fill(); coinCtx.lineWidth = 1.8; coinCtx.strokeStyle = strokeColor; stroke();
                             
-                            coinCtx.beginPath(); coinCtx.ellipse(c.x, c.y, c.w / 2, c.h / 2, 0, 0, 2 * Math.PI); coinCtx.fillStyle = '#ffc44d'; coinCtx.fill(); coinCtx.stroke();
-                            coinCtx.beginPath(); coinCtx.ellipse(c.x, c.y, c.w / 3.8, c.h / 3.8, 0, 0, 2 * Math.PI); coinCtx.strokeStyle = 'rgba(217, 158, 20, 0.85)'; coinCtx.lineWidth = 1.2; coinCtx.stroke();
+                            coinCtx.beginPath(); coinCtx.ellipse(c.x, c.y, c.w / 2, c.h / 2, 0, 0, 2 * Math.PI); coinCtx.fillStyle = '#ffc44d'; coinCtx.fill(); stroke();
+                            coinCtx.beginPath(); coinCtx.ellipse(c.x, c.y, c.w / 3.8, c.h / 3.8, 0, 0, 2 * Math.PI); coinCtx.strokeStyle = 'rgba(217, 158, 20, 0.85)'; coinCtx.lineWidth = 1.2; stroke();
                             coinCtx.restore();
                         });
                     });
@@ -1004,10 +1023,20 @@
 
         function openDeleteModal(id) { pendingDeleteId = id; document.getElementById('deleteConfirmModal').classList.add('active'); }
         function closeDeleteModal() { pendingDeleteId = null; document.getElementById('deleteConfirmModal').classList.remove('active'); }
+        
         function executeDeleteRecord() {
             if (pendingDeleteId) {
                 records = records.filter(r => r.id !== pendingDeleteId);
+                
+                // 🌟 先本地儲存變更
+                if (auth.currentUser) {
+                    const emailKey = auth.currentUser.email.replace(/\./g, ',');
+                    localStorage.setItem('records_' + emailKey, JSON.stringify(records));
+                }
+                
+                // 後台自動同步雲端
                 if (window.saveToFirebase) window.saveToFirebase(records);
+                
                 closeDeleteModal(); closeRecordModal();
                 syncHeaderDisplay();
             }
@@ -1037,7 +1066,6 @@
             let cls = 'cal-day';
             if (isBlur) cls += ' blur-day';
             
-            // 使用動態計算的今日日期
             const _t = new Date();
             const todayISO = `${_t.getFullYear()}-${String(_t.getMonth() + 1).padStart(2, '0')}-${String(_t.getDate()).padStart(2, '0')}`;
             if (cellDateStr === todayISO) cls += ' today-circle';
@@ -1081,7 +1109,16 @@
         function executeAdd(amount, category, date, diary, forcedType) {
             const newR = { id: Date.now(), type: forcedType, amount: amount, category: category, date: date, diary: diary };
             records.unshift(newR); 
+            
+            // 🌟 先本地儲存
+            if (auth.currentUser) {
+                const emailKey = auth.currentUser.email.replace(/\./g, ',');
+                localStorage.setItem('records_' + emailKey, JSON.stringify(records));
+            }
+
+            // 後台靜默同步雲端
             if (window.saveToFirebase) window.saveToFirebase(records);
+            
             const recordDate = new Date(date); currentSelectedYear = recordDate.getFullYear(); currentSelectedMonth = recordDate.getMonth();
             viewMode = 'month';
             syncHeaderDisplay();
@@ -1119,9 +1156,7 @@
         function openEmojiPicker(source) { currentActiveIconSource = source; document.getElementById('emojiModal').classList.add('active'); }
         function closeEmojiModal() { document.getElementById('emojiModal').classList.remove('active'); }
         function selectEmoji(emoji) { 
-            if (currentActiveIconSource === 'modal') { 
-                selectedCustomIconModal = emoji; document.getElementById('custom-icon-preview-modal').innerText = emoji; 
-            } else if (currentActiveIconSource === 'record') { 
+            if (currentActiveIconSource === 'record') { 
                 selectedCustomIconRecord = emoji; 
                 recordState.category = '其他';
                 renderRecordCategories(); 
@@ -1129,7 +1164,6 @@
             closeEmojiModal(); 
         }
 
-        /* 🚨 系統對話框，自帶 取消/確認 按鈕 */
         window.editDiary = function() {
             let current = recordState.diary || '';
             let res = prompt('請輸入備忘日記：', current);
@@ -1234,7 +1268,6 @@
 
         function renderRecordCategories() {
             const grid = document.getElementById('record-cat-grid'); grid.innerHTML = '';
-            
             const isCurrentCustom = recordState.category.includes('其他') || !categories[recordState.type].includes(recordState.category);
 
             categories[recordState.type].forEach(cat => {
@@ -1290,16 +1323,13 @@
                 finalAmt = Math.round(finalAmt * 100) / 100; if (finalAmt <= 0) { alert('請輸入有效金額！'); return; }
                 
                 const year = recordState.date.getFullYear(); const month = String(recordState.date.getMonth() + 1).padStart(2, '0'); const day = String(recordState.date.getDate()).padStart(2, '0'); const dateStr = `${year}-${month}-${day}`; 
-                
                 const newDiary = recordState.diary || '';
                 
                 const isCurrentCustom = recordState.category.includes('其他') || !categories[recordState.type].includes(recordState.category);
                 let finalCat = recordState.category;
                 if (isCurrentCustom) {
                     let customName = document.getElementById('record-custom-name-display').innerText;
-                    if (customName === '輸入自訂分類名稱...' || customName.trim() === '') {
-                        customName = '其他';
-                    }
+                    if (customName === '輸入自訂分類名稱...' || customName.trim() === '') { customName = '其他'; }
                     finalCat = `${selectedCustomIconRecord} ${customName}`;
                 }
                 
@@ -1309,7 +1339,16 @@
                     const index = records.findIndex(r => r.id === recordState.id);
                     if (index !== -1) {
                         records[index] = { id: recordState.id, type: recordState.type, amount: finalAmt, category: finalCat, date: dateStr, diary: newDiary };
+                        
+                        // 🌟 先本地儲存變更
+                        if (auth.currentUser) {
+                            const emailKey = auth.currentUser.email.replace(/\./g, ',');
+                            localStorage.setItem('records_' + emailKey, JSON.stringify(records));
+                        }
+                        
+                        // 後台靜默同步雲端
                         if (window.saveToFirebase) window.saveToFirebase(records);
+                        
                         currentSelectedYear = year; currentSelectedMonth = recordState.date.getMonth(); viewMode = 'month';
                         syncHeaderDisplay();
                     }
