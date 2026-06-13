@@ -3,13 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>家庭記帳日記 - 專屬雲端版</title>
-    <!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>家庭記帳日記 - 專屬雲端版</title>
+    <title>家庭記帳日記 - 安全同步版</title>
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -18,7 +12,6 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
     
     <style>
-        /* --- 徹底還原完美無留白佈局，並將底色轉為金黃色 --- */
         html { 
             background-color: var(--bg-color); 
             width: 100vw; 
@@ -98,8 +91,7 @@
             justify-content: center;
             padding: 20px;
         }
-        .login-title { font-size: 32px; font-weight: 900; color: var(--text-main); margin-bottom: 12px; }
-        .login-subtitle { font-size: 16px; font-weight: bold; color: var(--text-sub); margin-bottom: 40px; }
+        .login-title { font-size: 32px; font-weight: 900; color: var(--text-main); margin-bottom: 40px; }
 
         #connection-dot {
             font-size: 14px; font-weight: 800; padding: 12px 16px; border-radius: 12px;
@@ -280,11 +272,10 @@
 
     <div id="login-screen">
         <h1 class="login-title">家庭記帳日記</h1>
-        <p class="login-subtitle">純雲端版，請先登入</p>
-        <button class="google-btn" onclick="signInWithGoogle()" style="width: 80%; max-width: 320px; height: 50px;">
+        <button id="main-login-btn" class="google-btn" onclick="signInWithGoogle()" style="width: 80%; max-width: 320px; height: 50px; display: none;">
             <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google"> 授權 Google 帳號登入
         </button>
-        <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 16px; display: none; text-align: center;"></p>
+        <p id="login-error-msg" style="color: var(--text-sub); font-size: 15px; font-weight: bold; margin-top: 16px; text-align: center;">⏳ 檢查登入狀態中...</p>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
@@ -489,7 +480,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        // 🚨 引入 signInWithRedirect 解決 iPhone 封鎖彈出視窗嘅問題
+        import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -532,57 +524,85 @@
            }
         });
 
+        // 🚨 改為直接跳轉頁面登入
         window.signInWithGoogle = function() {
-            document.getElementById('login-error-msg').style.display = 'none';
-            provider.setCustomParameters({ prompt: 'select_account' });
+            const errorMsg = document.getElementById('login-error-msg');
+            errorMsg.innerText = "⏳ 正在跳轉至 Google 登入...";
+            errorMsg.style.color = "var(--text-sub)";
+            errorMsg.style.display = 'block';
+            document.getElementById('main-login-btn').style.display = 'none';
             
-            signInWithPopup(auth, provider).catch(err => {
+            provider.setCustomParameters({ prompt: 'select_account' });
+            signInWithRedirect(auth, provider).catch(err => {
                 console.log(err);
-                document.getElementById('login-error-msg').innerText = "❌ 登入失敗或被取消";
-                document.getElementById('login-error-msg').style.display = 'block';
+                errorMsg.innerText = "❌ 跳轉登入發生錯誤";
+                errorMsg.style.color = "#ff5b5b";
+                document.getElementById('main-login-btn').style.display = 'flex';
             });
         };
 
+        // 捕捉跳轉返回嘅錯誤
+        getRedirectResult(auth).catch(err => {
+            console.log("Redirect Error:", err);
+            const errorMsg = document.getElementById('login-error-msg');
+            errorMsg.innerText = "❌ 登入被取消或出現錯誤";
+            errorMsg.style.color = "#ff5b5b";
+            errorMsg.style.display = 'block';
+            document.getElementById('main-login-btn').style.display = 'flex';
+        });
+
         window.signOutGoogle = function() {
+            if(auth.currentUser) {
+                const emailKey = auth.currentUser.email.replace(/\./g, ',');
+                localStorage.removeItem('records_' + emailKey);
+            }
             signOut(auth).then(() => location.reload());
         };
 
         onAuthStateChanged(auth, (user) => {
             const loginScreen = document.getElementById('login-screen');
+            const errorMsg = document.getElementById('login-error-msg');
+            const mainLoginBtn = document.getElementById('main-login-btn');
             const statusText = document.getElementById('sidebar-auth-status');
             const logoutBtn = document.getElementById('sidebar-google-logout-btn');
             const loginBtn = document.getElementById('sidebar-google-login-btn');
 
             if (user) {
-                document.getElementById('login-error-msg').innerText = "⏳ 正在驗證白名單權限...";
-                document.getElementById('login-error-msg').style.color = "var(--text-sub)";
-                document.getElementById('login-error-msg').style.display = 'block';
-
+                // 🚨 核心安全更新：登入後【絕對唔可以】即刻收起登入畫面！
+                // 必須等待 Firebase 白名單驗證通過，確保安全防線生效。
+                const emailKey = user.email.replace(/\./g, ',');
                 statusText.innerText = `已登入:\n${user.email}`;
                 logoutBtn.style.display = 'flex';
                 loginBtn.style.display = 'none';
+                mainLoginBtn.style.display = 'none';
                 
-                recordsRef = ref(db, 'users/' + user.email.replace(/\./g, ',') + '/records');
-                startDatabaseSync(); 
+                errorMsg.innerText = "🛡️ 正在與伺服器核對白名單權限...";
+                errorMsg.style.color = "var(--text-sub)";
+                errorMsg.style.display = 'block';
+                
+                recordsRef = ref(db, 'users/' + emailKey + '/records');
+                startDatabaseSync(emailKey); 
             } else {
+                // 未登入：顯示登入按鈕
                 loginScreen.style.display = 'flex';
+                mainLoginBtn.style.display = 'flex';
+                errorMsg.style.display = 'none';
+                
                 statusText.innerText = '尚未登入';
                 logoutBtn.style.display = 'none';
                 loginBtn.style.display = 'flex';
                 
                 window.records = []; 
-                if (typeof window.syncHeaderDisplay === 'function') {
-                    window.syncHeaderDisplay();
-                }
+                if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
             }
         });
 
-        function startDatabaseSync() {
+        function startDatabaseSync(emailKey) {
             if (!recordsRef) return;
             
-            showToast("⏳ 正在讀取雲端資料...");
-            
+            // 🚨 Firebase 權限查核
             onValue(recordsRef, (snapshot) => {
+                // 雲端驗證成功放行！此時才安全解鎖登入畫面
                 document.getElementById('login-screen').style.display = 'none';
 
                 const data = snapshot.val();
@@ -591,8 +611,9 @@
                     cloudRecords = Object.values(data).filter(r => r !== null);
                 }
 
+                // 以雲端數據為主，並覆蓋更新本地儲存
                 window.records = cloudRecords.sort((a, b) => b.id - a.id);
-                showToast(`☁️ 成功讀取 ${window.records.length} 筆資料！`);
+                localStorage.setItem('records_' + emailKey, JSON.stringify(window.records));
 
                 if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
                 if (document.getElementById('calendarModal') && document.getElementById('calendarModal').classList.contains('active')) {
@@ -602,18 +623,24 @@
             }, (error) => {
                 console.error("Firebase Read Error:", error);
                 if (error.code === 'PERMISSION_DENIED') {
+                    // 黑客或被踢出白名單嘅人，立刻粉碎本地紀錄並鎖死
+                    localStorage.removeItem('records_' + emailKey);
+                    window.records = [];
+                    if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
+
                     let currentEmail = auth.currentUser ? auth.currentUser.email : '未知';
                     document.getElementById('sidebar-auth-status').innerText = '無權限存取 (白名單阻擋)';
                     
                     const loginScreen = document.getElementById('login-screen');
                     loginScreen.style.display = 'flex';
+                    document.getElementById('main-login-btn').style.display = 'flex';
                     
                     const msgEl = document.getElementById('login-error-msg');
                     msgEl.innerText = `⚠️ 權限不足！\n你的 Email:\n【 ${currentEmail} 】\n未被加入白名單，無法進入首頁。`;
                     msgEl.style.color = "#ff5b5b";
                     msgEl.style.display = 'block';
                 } else {
-                    showToast("❌ 讀取失敗：" + error.message, 5000);
+                    showToast("❌ 同步失敗：" + error.message, 5000);
                 }
             });
         }
@@ -626,13 +653,11 @@
                 });
 
                 set(recordsRef, recordsObj)
-                    .then(() => showToast("☁️ 資料已成功寫入雲端！"))
+                    .then(() => showToast("☁️ 雲端同步成功！"))
                     .catch(error => {
                         console.error("Firebase Write Error:", error);
-                        showToast("❌ 雲端寫入失敗：" + error.message, 5000);
+                        showToast("❌ 雲端備份失敗：" + error.message, 5000);
                     });
-            } else {
-                showToast("❌ 無法連線至雲端，寫入失敗", 4000);
             }
         };
     </script>
@@ -679,7 +704,6 @@
         ];
 
         var records = []; 
-        let selectedCustomIconModal = '🎨';
         let selectedCustomIconRecord = '🎨';
         let pendingDeleteId = null; 
         let animationProgress = 0;
@@ -1010,10 +1034,20 @@
 
         function openDeleteModal(id) { pendingDeleteId = id; document.getElementById('deleteConfirmModal').classList.add('active'); }
         function closeDeleteModal() { pendingDeleteId = null; document.getElementById('deleteConfirmModal').classList.remove('active'); }
+        
         function executeDeleteRecord() {
             if (pendingDeleteId) {
                 records = records.filter(r => r.id !== pendingDeleteId);
+                
+                // 🌟 先本地儲存變更
+                if (auth.currentUser) {
+                    const emailKey = auth.currentUser.email.replace(/\./g, ',');
+                    localStorage.setItem('records_' + emailKey, JSON.stringify(records));
+                }
+                
+                // 後台自動同步雲端
                 if (window.saveToFirebase) window.saveToFirebase(records);
+                
                 closeDeleteModal(); closeRecordModal();
                 syncHeaderDisplay();
             }
@@ -1043,7 +1077,6 @@
             let cls = 'cal-day';
             if (isBlur) cls += ' blur-day';
             
-            // 使用動態計算的今日日期
             const _t = new Date();
             const todayISO = `${_t.getFullYear()}-${String(_t.getMonth() + 1).padStart(2, '0')}-${String(_t.getDate()).padStart(2, '0')}`;
             if (cellDateStr === todayISO) cls += ' today-circle';
@@ -1087,7 +1120,16 @@
         function executeAdd(amount, category, date, diary, forcedType) {
             const newR = { id: Date.now(), type: forcedType, amount: amount, category: category, date: date, diary: diary };
             records.unshift(newR); 
+            
+            // 🌟 先本地儲存
+            if (auth.currentUser) {
+                const emailKey = auth.currentUser.email.replace(/\./g, ',');
+                localStorage.setItem('records_' + emailKey, JSON.stringify(records));
+            }
+
+            // 後台靜默同步雲端
             if (window.saveToFirebase) window.saveToFirebase(records);
+            
             const recordDate = new Date(date); currentSelectedYear = recordDate.getFullYear(); currentSelectedMonth = recordDate.getMonth();
             viewMode = 'month';
             syncHeaderDisplay();
@@ -1125,9 +1167,7 @@
         function openEmojiPicker(source) { currentActiveIconSource = source; document.getElementById('emojiModal').classList.add('active'); }
         function closeEmojiModal() { document.getElementById('emojiModal').classList.remove('active'); }
         function selectEmoji(emoji) { 
-            if (currentActiveIconSource === 'modal') { 
-                selectedCustomIconModal = emoji; document.getElementById('custom-icon-preview-modal').innerText = emoji; 
-            } else if (currentActiveIconSource === 'record') { 
+            if (currentActiveIconSource === 'record') { 
                 selectedCustomIconRecord = emoji; 
                 recordState.category = '其他';
                 renderRecordCategories(); 
@@ -1135,7 +1175,6 @@
             closeEmojiModal(); 
         }
 
-        /* 🚨 系統對話框，自帶 取消/確認 按鈕 */
         window.editDiary = function() {
             let current = recordState.diary || '';
             let res = prompt('請輸入備忘日記：', current);
@@ -1240,7 +1279,6 @@
 
         function renderRecordCategories() {
             const grid = document.getElementById('record-cat-grid'); grid.innerHTML = '';
-            
             const isCurrentCustom = recordState.category.includes('其他') || !categories[recordState.type].includes(recordState.category);
 
             categories[recordState.type].forEach(cat => {
@@ -1296,16 +1334,13 @@
                 finalAmt = Math.round(finalAmt * 100) / 100; if (finalAmt <= 0) { alert('請輸入有效金額！'); return; }
                 
                 const year = recordState.date.getFullYear(); const month = String(recordState.date.getMonth() + 1).padStart(2, '0'); const day = String(recordState.date.getDate()).padStart(2, '0'); const dateStr = `${year}-${month}-${day}`; 
-                
                 const newDiary = recordState.diary || '';
                 
                 const isCurrentCustom = recordState.category.includes('其他') || !categories[recordState.type].includes(recordState.category);
                 let finalCat = recordState.category;
                 if (isCurrentCustom) {
                     let customName = document.getElementById('record-custom-name-display').innerText;
-                    if (customName === '輸入自訂分類名稱...' || customName.trim() === '') {
-                        customName = '其他';
-                    }
+                    if (customName === '輸入自訂分類名稱...' || customName.trim() === '') { customName = '其他'; }
                     finalCat = `${selectedCustomIconRecord} ${customName}`;
                 }
                 
@@ -1315,1336 +1350,16 @@
                     const index = records.findIndex(r => r.id === recordState.id);
                     if (index !== -1) {
                         records[index] = { id: recordState.id, type: recordState.type, amount: finalAmt, category: finalCat, date: dateStr, diary: newDiary };
-                        if (window.saveToFirebase) window.saveToFirebase(records);
-                        currentSelectedYear = year; currentSelectedMonth = recordState.date.getMonth(); viewMode = 'month';
-                        syncHeaderDisplay();
-                    }
-                }
-                closeRecordModal();
-            } else {
-                if (recordState.expression === '' && !ops.includes(val) && mainDisp.innerText !== '0') { mainDisp.innerText = '0'; }
-                const last = recordState.expression.slice(-1); if (ops.includes(val) && ops.includes(last)) { recordState.expression = recordState.expression.slice(0, -1) + val; } else { recordState.expression += val; }
-                try { let s = recordState.expression.replace(/×/g, '*').replace(/÷/g, '/'); if (ops.includes(val)) s = s.slice(0, -1); let v = eval(s); if (v !== undefined) mainDisp.innerText = Math.round(v * 100) / 100; } catch(e) {}
-            }
-        }
-
-        function renderHistory() {
-            const listContainer = document.getElementById('history-list'); listContainer.innerHTML = '';
-            const prefix = `${currentSelectedYear}-${(currentSelectedMonth + 1).toString().padStart(2, '0')}`;
-            const filteredRecords = records.filter(r => viewMode === 'all' || r.date.startsWith(prefix));
-
-            if (filteredRecords.length === 0) {
-                listContainer.innerHTML = `<div class="empty-state-wrapper"><div class="empty-text-main">沒有記錄</div><div class="empty-text-sub" style="font-size:13px; color:#aaa; margin-top:2px;">點擊 ＋ 號新增一筆</div></div>`; return;
-            }
-
-            const groupedRecords = {}; filteredRecords.forEach(r => { if (!groupedRecords[r.date]) groupedRecords[r.date] = []; groupedRecords[r.date].push(r); });
-
-            Object.keys(groupedRecords).sort((a, b) => new Date(b) - new Date(a)).forEach(dateStr => {
-                const dayRecords = groupedRecords[dateStr]; const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']; const dayOfWeekStr = weekDays[new Date(dateStr).getDay()];
-                const dateGroupDiv = document.createElement('div'); dateGroupDiv.className = 'date-group';
-                let daySum = 0; dayRecords.forEach(dr => { daySum += dr.amount; });
-                const headerDiv = document.createElement('div'); headerDiv.className = 'date-header'; headerDiv.innerHTML = `<span>${dateStr.replace(/-/g, '/')} ${dayOfWeekStr}</span><span class="date-summary-total">$${daySum.toLocaleString()}</span>`; dateGroupDiv.appendChild(headerDiv);
-
-                dayRecords.forEach(item => {
-                    const itemDiv = document.createElement('div'); itemDiv.className = 'history-item'; itemDiv.onclick = () => openRecordModal(item.id);
-                    const icon = item.category.split(' ')[0] || '📝'; const name = item.category.substring(icon.length).trim() || item.category;
-                    itemDiv.innerHTML = `
-                        <div class="item-left"><div class="item-icon">${icon}</div><div class="item-info"><span class="item-category">${name}</span>${item.diary ? `<span class="item-diary">${item.diary}</span>` : ''}</div></div>
-                        <div class="item-right-action-wrapper"><div class="item-amount-box"><span class="item-amount" style="color: ${item.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)'}">${item.type === 'income' ? '+' : '-'}$${item.amount.toLocaleString()}</span></div><button class="list-action-delete-btn" onclick="event.stopPropagation(); openDeleteModal(${item.id})">刪除</button></div>
-                    `;
-                    dateGroupDiv.appendChild(itemDiv);
-                });
-                listContainer.appendChild(dateGroupDiv);
-            });
-        }
-    </script>
-</body>
-</html>
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-touch-fullscreen" content="yes">
-    <meta name="theme-color" content="#FFD700" id="theme-color-meta">
-    
-    <style>
-        /* --- 徹底還原完美無留白佈局，並將底色轉為金黃色 --- */
-        html { 
-            background-color: var(--bg-color); 
-            width: 100vw; 
-            height: 100dvh; 
-            overflow: hidden; 
-            overscroll-behavior: none;
-        }
-        
-        :root {
-            /* 全面改為金黃色背景 */
-            --bg-color: #FFD700; 
-            --primary-color: #4ab3e3; --income-color: #7bc7c3; --expense-color: #f7a3b6;
-            --text-main: #333333; --text-sub: #888888; --card-bg: #ffffff; --radius-main: 16px; --radius-sub: 12px;
-            --calendar-today-bg: #ff7b7b; --border-color: #eef2f5; --input-bg: #fafbfe; --nav-btn-bg: #f0f4f8;
-            --nav-btn-text: #555555; --black-stroke: #222222;
-            --calc-bg: #fdf6f0; --calc-btn-num: #ffffff; --calc-btn-op: #ffe4e1; --calc-btn-eq: #ffe066; --calc-text: #5d5146;
-        }
-
-        [data-theme="dark"] {
-            /* 暗黑模式下的深金黃色背景 */
-            --bg-color: #4A3B00; 
-            --text-main: #f5f5f7; --text-sub: #a1a1a6; --card-bg: #1c1c1e;
-            --border-color: #2c2c2e; --input-bg: #2c2c2e; --nav-btn-bg: #2c2c2e; --nav-btn-text: #e5e5ea;
-            --black-stroke: #ffffff;
-            --calc-bg: #25211e; --calc-btn-num: #3a3532; --calc-btn-op: #5c4d4a; --calc-btn-eq: #b39224; --calc-text: #f5f5f7;
-        }
-
-        /* 移除點擊高亮，防止誤觸影響體驗 */
-        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; transition: background-color 0.5s, border-color 0.5s, color 0.5s; }
-        
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            background-color: var(--bg-color); 
-            color: var(--text-main); 
-            line-height: 1.4; 
-            display: flex; 
-            flex-direction: column; 
-            position: fixed;
-            top: 0; left: 0; 
-            width: 100vw; 
-            height: 100dvh; /* 確保全高，不留白 */
-            overflow: hidden; 
-            overscroll-behavior-y: none;
-        }
-        
-        a, button, .clickable, .history-item, .nav-btn, .cal-day, .emoji-item, .calc-btn, .month-cell-btn { cursor: pointer; }
-
-        .google-btn { background-color: #ffffff; color: #757575; border: 1px solid #ddd; border-radius: 24px; padding: 12px 24px; font-size: 16px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; width: 100%; transition: transform 0.2s; }
-        .google-btn:active { transform: scale(0.96); }
-        .google-btn img { width: 24px; height: 24px; }
-        [data-theme="dark"] .google-btn { background-color: #333; color: #fff; border-color: #555; }
-
-        /* --- 強制登入畫面 --- */
-        #login-screen {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100vw; height: 100dvh;
-            background-color: var(--bg-color);
-            z-index: 99999;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .login-title { font-size: 32px; font-weight: 900; color: var(--text-main); margin-bottom: 12px; }
-        .login-subtitle { font-size: 16px; font-weight: bold; color: var(--text-sub); margin-bottom: 40px; }
-
-        /* --- 頂部導覽列功能鈕 --- */
-        .top-action-bar { flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 12px 20px; background: var(--card-bg); border-bottom: 1px solid var(--border-color); }
-        .left-btns { display: flex; gap: 8px; align-items: center; }
-        .capsule-btn { background: #000000; color: #ffffff; border: none; padding: 6px 16px; border-radius: 20px; font-size: 14px; font-weight: bold; min-height: 36px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
-        [data-theme="dark"] .capsule-btn { background: #ffffff; color: #000000; }
-        .theme-capsule-btn { background: var(--nav-btn-bg); border: none; width: 36px; height: 36px; border-radius: 50%; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); color: var(--text-main); }
-        .center-month-selector { font-size: 18px; font-weight: bold; color: var(--text-main); display: flex; align-items: center; gap: 6px; background: none; border: none; padding: 8px 12px; border-radius: 8px; }
-        .triangle-down { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--text-main); display: inline-block; }
-        .nav-btn { background: var(--nav-btn-bg); border: none; padding: 0 12px; border-radius: 20px; font-size: 13px; font-weight: bold; color: var(--nav-btn-text); display: flex; align-items: center; justify-content: center; min-height: 44px; /* Touch target >= 44px */ }
-
-        /* --- 設定側邊欄 --- */
-        .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: rgba(0,0,0,0.5); z-index: 9998; opacity: 0; pointer-events: none; transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: opacity; }
-        .sidebar-overlay.active { opacity: 1; pointer-events: auto; }
-        
-        .sidebar { position: fixed; top: 0; left: 0; width: 280px; height: 100dvh; background: var(--card-bg); z-index: 9999; transform: translateX(-100%); transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.5s ease; box-shadow: 0 0 0 rgba(0,0,0,0); display: flex; flex-direction: column; will-change: transform; }
-        .sidebar.active { transform: translateX(0); box-shadow: 4px 0 20px rgba(0,0,0,0.1); }
-        
-        .sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: max(20px, env(safe-area-inset-top)) 20px 20px; border-bottom: 1px solid var(--border-color); }
-        .sidebar-header h2 { font-size: 20px; font-weight: 800; color: var(--text-main); margin: 0; }
-        .sidebar-content { padding: 20px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
-        .settings-group { display: flex; flex-direction: column; gap: 10px; }
-        .settings-label { font-size: 13px; font-weight: bold; color: var(--text-sub); margin-bottom: 4px; }
-        .settings-action-btn { background: var(--nav-btn-bg); color: var(--text-main); border: 2px solid var(--border-color); padding: 14px 16px; border-radius: 12px; font-size: 16px; font-weight: bold; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 10px; min-height: 44px;}
-
-        /* --- 固定中間圓餅圖看板 --- */
-        .header-dashboard { flex-shrink: 0; background: var(--card-bg); padding: 12px 20px 16px 20px; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; box-shadow: 0 8px 20px rgba(0,0,0,0.04); text-align: center; z-index: 10; margin-bottom: 0; touch-action: pan-y; }
-        #chart-swipe-track { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; will-change: transform; }
-        .chart-container { position: relative; width: 240px; height: 240px; margin: 0 auto; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-        #pieChart { width: 240px; height: 240px; display: block; }
-        .chart-center-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; justify-content: center; align-items: center; width: 130px; height: 130px; background: var(--card-bg); border-radius: 50%; z-index: 10; overflow: hidden; }
-        .coin-canvas-container { width: 100px; height: 65px; position: relative; margin-top: 8px; margin-bottom: 2px; display: flex; align-items: flex-end; justify-content: center; overflow: hidden; }
-        .chart-center-text .title { font-size: 11px; color: var(--text-sub); font-weight: bold; margin-bottom: 1px; }
-        .chart-center-text .balance { font-size: 14px; font-weight: 800; color: var(--text-main); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-        /* --- 歷史明細容器區 --- */
-        .container { flex: 1; padding: 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
-        .history-container { width: 100%; } 
-        .empty-state-wrapper { display: flex; flex-direction: column; align-items: center; padding-top: 60px; color: var(--text-sub); }
-        .empty-text-main { font-size: 15px; color: #8e8e93; font-weight: 500; }
-        
-        .fixed-center-add-btn { position: fixed; bottom: calc(24px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: 64px; height: 64px; background-color: #ff7b7b; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #222; box-shadow: 0 4px 12px rgba(255, 123, 123, 0.4); z-index: 2500; cursor: pointer; transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: transform; }
-        .fixed-center-add-btn:active { transform: translateX(-50%) scale(0.92); }
-        [data-theme="dark"] .fixed-center-add-btn { border-color: #fff; }
-        
-        .fixed-center-add-btn::before, .fixed-center-add-btn::after { content: ''; position: absolute; background-color: white; border-radius: 2px; top: 50%; left: 50%; transform: translate(-50%, -50%); }
-        .fixed-center-add-btn::before { width: 28px; height: 4px; }
-        .fixed-center-add-btn::after { width: 4px; height: 28px; }
-
-        .date-group { background: var(--card-bg); border: 2px solid #222222; border-radius: 18px; margin-bottom: 16px; overflow: hidden; box-shadow: 0 4px 0px #222222; }
-        [data-theme="dark"] .date-group { border-color: #ffffff; box-shadow: 0 4px 0px #ffffff; }
-        .date-header { padding: 14px 16px; font-size: 16px; font-weight: bold; color: var(--text-main); border-bottom: 2px solid #222222; display: flex; justify-content: space-between; align-items: center; }
-        [data-theme="dark"] .date-header { border-bottom-color: #ffffff; }
-        .date-summary-total { font-weight: bold; font-size: 16px; color: #4ab3e3; }
-        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid var(--border-color); background: var(--card-bg); min-height: 58px; }
-        .history-item:active { background-color: var(--nav-btn-bg); }
-        .history-item:last-child { border-bottom: none; }
-        .item-left { display: flex; align-items: center; gap: 12px; }
-        .item-icon { width: 36px; height: 36px; border-radius: 50%; background: #eef7fc; border: 1.5px solid #222222; display: flex; align-items: center; justify-content: center; font-size: 18px; }
-        [data-theme="dark"] .item-icon { background: #233540; border-color: #ffffff; }
-        .item-info { display: flex; flex-direction: column; }
-        .item-category { font-size: 15px; font-weight: bold; color: var(--text-main); }
-        .item-diary { font-size: 12px; color: var(--text-sub); margin-top: 3px; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .item-right-action-wrapper { display: flex; align-items: center; gap: 12px; }
-        .item-amount-box { display: flex; flex-direction: column; align-items: flex-end; }
-        .item-amount { font-size: 16px; font-weight: bold; color: var(--text-main); }
-        .list-action-delete-btn { background: #fff5f5; color: #ff5b5b; border: 1.5px solid #ff5b5b; font-size: 12px; font-weight: bold; padding: 6px 12px; border-radius: 8px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
-        [data-theme="dark"] .list-action-delete-btn { background: #2c1919; color: #ff8787; border-color: #ff8787; }
-
-        /* --- 彈窗與計算機 --- */
-        .month-grid-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 8px 4px; }
-        .month-cell-btn { height: 54px; border: 2px solid var(--border-color); background: var(--card-bg); border-radius: var(--radius-sub); font-size: 15px; font-weight: bold; color: var(--text-main); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }
-        .month-cell-btn.active { background: var(--primary-color); border-color: var(--primary-color); color: #ffffff; box-shadow: 0 4px 12px rgba(74, 179, 227, 0.25); }
-
-        .delete-confirm-box { display: flex; flex-direction: column; gap: 16px; padding: 8px 4px; text-align: center; }
-        .delete-confirm-msg { font-size: 16px; font-weight: bold; color: var(--text-main); line-height: 1.5; margin-bottom: 4px; }
-        .delete-modal-actions { display: flex; gap: 12px; width: 100%; }
-        .action-confirm-block-btn { flex: 1; height: 50px; background: #ff5b5b; color: #ffffff; border: 2.5px solid #222222; border-radius: var(--radius-sub); font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 #222222; }
-        [data-theme="dark"] .action-confirm-block-btn { border-color: #ffffff; box-shadow: 0 4px 0 #ffffff; }
-        .action-cancel-block-btn { flex: 1; height: 50px; background: var(--nav-btn-bg); color: var(--text-main); border: 2.5px solid #222222; border-radius: var(--radius-sub); font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 #222222; }
-        [data-theme="dark"] .action-cancel-block-btn { border-color: #ffffff; box-shadow: 0 4px 0 #ffffff; }
-
-        .calendar-sheet { height: 100dvh !important; max-height: 100dvh !important; border-radius: 0 !important; display: flex; flex-direction: column; border-top: none !important; background: var(--card-bg); padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: 0 !important; overflow: hidden !important; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1) !important; will-change: transform; }
-        
-        #modal-date-records { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; text-align: center; padding: 12px; background: var(--input-bg); border-radius: var(--radius-main); border: 1.5px solid var(--border-color); box-sizing: border-box; }
-        .cal-week-title { font-size: 13px; font-weight: 800; color: var(--text-sub); padding: 4px 0; }
-        .cal-day { font-size: 15px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; justify-content: center; position: relative; aspect-ratio: 1; margin: 0 auto; width: 38px; height: 38px; border-radius: 50%; }
-        .cal-day.blur-day { color: #ccc !important; opacity: 0.4; }
-        .cal-day.today-circle { background-color: var(--calendar-today-bg) !important; color: #ffffff !important; font-weight: bold; }
-        .cal-day.selected-circle { background-color: var(--text-main); color: var(--card-bg) !important; font-weight: bold; }
-        .day-dot { position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 5px; height: 5px; background-color: #ff5b5b; border-radius: 50%; }
-
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: rgba(0,0,0,0.5); z-index: 2000; display: none; align-items: flex-end; transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: opacity; }
-        .modal-overlay.active { display: flex; opacity: 1; }
-        
-        .modal-sheet { width: 100%; background: var(--card-bg); border-top-left-radius: 24px; border-top-right-radius: 24px; padding: 20px; padding-bottom: calc(20px + env(safe-area-inset-bottom)); max-height: 90vh; overflow-y: auto; box-shadow: 0 -4px 20px rgba(0,0,0,0.15); animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: transform; }
-        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-        
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-        .modal-title { font-size: 17px; font-weight: 800; color: var(--text-main); }
-        .modal-close { font-size: 20px; color: var(--text-sub); background: none; border: none; padding: 4px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center;}
-        
-        /* 🚨 將輸入框改為「偽裝按鈕」，不會觸發 HTML 輸入法焦點 */
-        .input-ctrl { 
-            width: 100%; 
-            height: 46px; 
-            border: 1px solid var(--border-color); 
-            border-radius: var(--radius-sub); 
-            padding: 0 12px; 
-            font-size: 16px; 
-            background-color: var(--input-bg); 
-            color: var(--text-main); 
-            outline: none; 
-            display: flex;
-            align-items: center;
-            overflow: hidden; 
-            white-space: nowrap; 
-            text-overflow: ellipsis; 
-            cursor: pointer; 
-        }
-        
-        .type-selector { display: flex; gap: 10px; margin-bottom: 14px; }
-        .type-btn { flex: 1; height: 46px; border: 2px solid var(--border-color); background: var(--card-bg); border-radius: var(--radius-sub); font-size: 15px; font-weight: bold; color: var(--text-sub); display: flex; align-items: center; justify-content: center; transition: all 0.4s;}
-        .type-btn.active[data-type="expense"] { border-color: var(--expense-color); background: var(--expense-color); color: #ffffff; }
-        .type-btn.active[data-type="income"] { border-color: var(--income-color); background: var(--income-color); color: #ffffff; }
-        
-        .emoji-picker-container { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; max-height: 240px; overflow-y: auto; padding: 6px; border: 1px solid var(--border-color); border-radius: var(--radius-sub); background: var(--bg-color); }
-        .emoji-item { font-size: 22px; height: 44px; display: flex; align-items: center; justify-content: center; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border-color); }
-
-        .calc-sheet { background-color: var(--calc-bg) !important; border-top: 3px solid var(--primary-color); }
-        .calc-screen-box { background: var(--card-bg); border-radius: var(--radius-main); padding: 12px 16px; margin-bottom: 16px; border: 2px solid var(--text-main); text-align: right; box-shadow: 0 4px 0 var(--text-main); }
-        .calc-display { font-size: 28px; font-weight: 900; color: var(--calc-text); }
-        .calc-keyboard-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
-        .calc-btn { height: 54px; border-radius: 18px; border: 2px solid var(--text-main); box-shadow: 0 4px 0 var(--text-main); display: flex; align-items: center; justify-content: center; transition: transform 0.1s; }
-        .calc-btn:active { transform: translateY(4px); box-shadow: 0 0px 0 var(--text-main); }
-        .calc-btn.btn-num { background-color: var(--calc-btn-num); }
-        .calc-btn.btn-op { background-color: var(--calc-btn-op); }
-        .calc-btn.btn-eq { background-color: var(--calc-btn-eq); }
-        .calc-btn.btn-c { background-color: #ffb3b3; }
-        .calc-btn.btn-back { background-color: #ffe4b5; }
-        .handdrawn-font-svg { width: 100%; height: 100%; display: block; }
-        .handdrawn-font-svg path { fill: none; stroke: var(--calc-text); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
-
-        /* --- 修正全螢幕彈窗高度計算 --- */
-        .full-screen-modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: var(--bg-color); z-index: 3000; display: none; flex-direction: column; overflow: hidden; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: transform; }
-        .full-screen-modal.active { display: flex; }
-        .record-header-bar { display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 12px; background: var(--card-bg); border-bottom: 1px solid var(--border-color); font-size: 18px; font-weight: bold; color: var(--text-main); z-index: 10; }
-        /* 調整上方內容區域的 padding-bottom，確保為下方數字鍵盤留出精確空間 */
-        .record-top-content { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; -webkit-overflow-scrolling: touch; padding-bottom: calc(52vh + env(safe-area-inset-bottom)); }
-        .record-cat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px 10px; padding: 10px 0; }
-        .record-cat-item { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--text-sub); font-weight: bold; }
-        .record-cat-icon { width: 48px; height: 48px; border-radius: 50%; background: var(--input-bg); display: flex; align-items: center; justify-content: center; font-size: 24px; border: 2px solid transparent; transition: all 0.4s; }
-        .record-cat-item.active { color: var(--text-main); }
-        .record-cat-item.active .record-cat-icon { border-color: var(--primary-color); background: #eef7fc; transform: scale(1.1); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        [data-theme="dark"] .record-cat-item.active .record-cat-icon { background: #233540; }
-
-        /* 修改數字鍵盤區域到底部，解決留白問題 */
-        .record-bottom-calc-area { position: absolute; bottom: 0; left: 0; width: 100vw; height: calc(50% + env(safe-area-inset-bottom)); min-height: 380px; background: var(--calc-bg); border-top: 3px solid var(--primary-color); border-top-left-radius: 28px; border-top-right-radius: 28px; padding-bottom: env(safe-area-inset-bottom); display: flex; flex-direction: column; transform: translateY(0); transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); box-shadow: 0 -4px 20px rgba(0,0,0,0.1); z-index: 100; will-change: transform; }
-        .record-bottom-calc-area.collapsed { transform: translateY(calc(100% - 96px - env(safe-area-inset-bottom))); }
-        .drawer-handle-wrap { width: 100%; height: 24px; display: flex; align-items: center; justify-content: center; cursor: grab; padding: 14px 0 6px 0; }
-        .drawer-handle { width: 40px; height: 5px; background: var(--text-sub); border-radius: 3px; opacity: 0.4; }
-
-        #recordModal .calc-screen-box { margin: 0 16px 8px 16px; padding: 4px 16px; min-height: 36px; display: flex; align-items: center; justify-content: flex-end; }
-        #recordModal .calc-display { font-size: 24px; line-height: 1; }
-        .record-date-ctrl { display: flex; align-items: center; justify-content: space-between; background: var(--card-bg); padding: 4px 12px; border-radius: var(--radius-main); border: 2px solid var(--text-main); margin: 0 16px 12px; box-shadow: 0 3px 0 var(--text-main); min-height: 32px; }
-        .record-date-btn { background: var(--nav-btn-bg); border: none; font-size: 12px; font-weight: bold; color: var(--text-main); padding: 4px 12px; border-radius: 12px; display: flex; align-items: center; justify-content: center; min-height: 36px;}
-        .record-date-text { font-size: 14px; font-weight: 800; color: var(--text-main); }
-        #record-date-today-badge { font-size: 12px; font-weight: bold; color: #ffffff; background: #ff7b7b; padding: 2px 6px; border-radius: 6px; margin-right: 4px; }
-        #record-date-weekday { font-size: 12px; }
-
-        #recordModal .calc-keyboard-grid { flex: 1; display: grid; grid-template-rows: repeat(4, minmax(0, 1fr)); grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 0 16px 12px 16px; min-height: 0; }
-        #recordModal .calc-btn { height: 100%; min-height: 0; border-radius: 12px; box-shadow: 0 3px 0 var(--text-main); }
-        #recordModal .calc-btn:active { transform: translateY(3px); box-shadow: 0 0px 0 var(--text-main); }
-    </style>
-</head>
-<body>
-
-    <div id="login-screen">
-        <h1 class="login-title">家庭記帳日記</h1>
-        <p class="login-subtitle">雲端同步，資料不遺失</p>
-        <button class="google-btn" onclick="signInWithGoogle()" style="width: 80%; max-width: 320px; height: 50px;">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google"> 授權 Google 帳號登入
-        </button>
-        <button class="google-btn" onclick="skipLogin()" style="width: 80%; max-width: 320px; height: 50px; margin-top: 16px; background-color: var(--nav-btn-bg); color: var(--text-main); border: none;">
-            先使用本機版
-        </button>
-        <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 16px; display: none;">登入失敗或無權限進入，請聯絡管理員。</p>
-    </div>
-
-    <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
-    <div class="sidebar" id="settings-sidebar">
-        <div class="sidebar-header">
-            <h2>設定</h2>
-            <button onclick="closeSettings()" class="nav-btn" style="min-width: 44px; min-height: 44px; font-size: 18px;">✕</button>
-        </div>
-        <div class="sidebar-content">
-            <div class="settings-group">
-                <span class="settings-label">外觀設定</span>
-                <button class="settings-action-btn" onclick="toggleTheme()" id="sidebar-theme-btn">☀️ 明亮模式</button>
-            </div>
-            <div class="settings-group">
-                <span class="settings-label">雲端帳號狀態</span>
-                <div id="sidebar-auth-status" style="font-size: 14px; color: var(--text-main); margin-bottom: 8px; font-weight: 600;">檢查狀態中...</div>
-                
-                <button id="sidebar-google-login-btn" class="google-btn" onclick="signInWithGoogle()" style="display: none; background-color: #eef7fc; color: #4ab3e3; border-color: #4ab3e3;">
-                    登入雲端帳號
-                </button>
-                <button id="sidebar-google-logout-btn" class="google-btn" onclick="signOutGoogle()" style="display: none; background-color: #fff5f5; color: #ff5b5b; border-color: #ff5b5b;">
-                    登出雲端帳號
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <div class="top-action-bar">
-        <div class="left-btns">
-            <button class="theme-capsule-btn" onclick="openSettings()" style="margin-right: 4px;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                    <line x1="4" y1="6" x2="20" y2="6"></line>
-                    <line x1="4" y1="12" x2="16" y2="12"></line>
-                    <line x1="4" y1="18" x2="12" y2="18"></line>
-                </svg>
-            </button>
-            <button class="capsule-btn" id="view-mode-toggle-btn" onclick="toggleViewMode()">月</button>
-        </div>
-        
-        <button class="center-month-selector" id="center-month-picker-trigger" onclick="openMonthModal()">
-            <span id="current-display-month-label">加載中...</span>
-            <span class="triangle-down"></span>
-        </button>
-        
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <button class="nav-btn" style="background: var(--primary-color); color: #fff; font-size: 16px; padding: 0 14px;" onclick="openCalendarModal()">📅</button>
-        </div>
-    </div>
-
-    <div class="header-dashboard">
-        <div id="chart-swipe-track">
-            <div class="chart-container" id="main-chart-container">
-                <canvas id="pieChart" width="480" height="480"></canvas>
-                <div class="chart-center-text">
-                    <div class="coin-canvas-container">
-                        <canvas id="coinDropCanvas" width="320" height="220" style="width: 100%; height: 100%;"></canvas>
-                    </div>
-                    <span class="title" id="chart-center-title">月結餘</span>
-                    <span class="balance" id="total-balance">$0</span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="container">
-        <div class="history-container" id="history-list"></div>
-    </div>
-
-    <div class="fixed-center-add-btn" onclick="openAddModal()"></div>
-
-    <div class="modal-overlay" id="calendarModal" onclick="closeCalendarModal(event)">
-        <div class="modal-sheet calendar-sheet" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <button class="cal-ctrl-btn nav-btn" onclick="adjustCalendarMonth(-1)">◀ 前月</button>
-                    <span id="cal-month-title" style="font-weight:900; font-size:17px; color:var(--text-main); margin:0 4px;">加載中...</span>
-                    <button class="cal-ctrl-btn nav-btn" onclick="adjustCalendarMonth(1)">後月 ▶</button>
-                </div>
-                <button class="modal-close" onclick="closeCalendarModal(null)">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v9h9"></path><circle cx="12" cy="12" r="3.5" fill="var(--card-bg)" stroke="currentColor"></circle></svg>
-                </button>
-            </div>
-            
-            <div id="cal-swipe-viewport" style="position: relative; width: 100%; overflow: hidden; margin-bottom: 16px; touch-action: pan-y;">
-                <div id="cal-swipe-track" style="position: relative; width: 100%; will-change: transform; display: flex;">
-                    <div class="calendar-grid" id="calendar-grid-container" style="width: 100%; flex-shrink: 0;"></div>
-                </div>
-            </div>
-
-            <div style="font-size: 14px; font-weight: 800; margin-bottom: 8px; color:var(--text-main);" id="selected-date-label">📍 選定日期</div>
-            <div id="modal-date-records"></div>
-        </div>
-    </div>
-
-    <div class="modal-overlay" id="monthModal" onclick="closeMonthModal(event)">
-        <div class="modal-sheet" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <span class="modal-title">📅 請選擇查看月份</span>
-                <button class="modal-close" onclick="closeMonthModal(null)">✕</button>
-            </div>
-            <div class="month-grid-container" id="month-buttons-target"></div>
-        </div>
-    </div>
-
-    <div class="modal-overlay" id="emojiModal" onclick="closeEmojiModal()">
-        <div class="modal-sheet" style="z-index: 3100;" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <span style="font-size: 16px; font-weight: bold;">🎨 挑選您專屬項目的圖示</span>
-                <button class="modal-close" onclick="closeEmojiModal()">✕</button>
-            </div>
-            <div class="emoji-picker-container" id="emoji-grid-target"></div>
-        </div>
-    </div>
-
-    <div class="modal-overlay" id="deleteConfirmModal" style="z-index: 4000;" onclick="closeDeleteModal()">
-        <div class="modal-sheet" onclick="event.stopPropagation()">
-            <div class="delete-confirm-box">
-                <div class="delete-confirm-msg">確認刪除這筆紀錄？</div>
-                <div class="delete-modal-actions">
-                    <button class="action-cancel-block-btn" onclick="closeDeleteModal()">取消</button>
-                    <button class="action-confirm-block-btn" onclick="executeDeleteRecord()">確認</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="full-screen-modal" id="recordModal">
-        <div class="record-header-bar">
-            <button onclick="closeRecordModal()" class="nav-btn" style="min-width: 44px;">✕</button>
-            <span id="record-modal-title">修改帳目</span>
-            <button onclick="promptDeleteRecord()" id="record-delete-btn" class="nav-btn" style="color: #ff5b5b; font-size: 18px; min-width: 44px; padding: 0;">🗑️</button>
-        </div>
-        
-        <div class="record-top-content">
-            <div class="type-selector" style="margin-bottom: 0;">
-                <button class="type-btn" data-type="income" id="record-type-inc" onclick="setRecordType('income')">💰 收入</button>
-                <button class="type-btn active" data-type="expense" id="record-type-exp" onclick="setRecordType('expense')">💸 支出</button>
-            </div>
-            
-            <div style="display: flex; flex-direction: column; gap: 6px;">
-                <label style="font-size:13px; font-weight:bold; color:var(--text-sub);">備忘日記</label>
-                <div id="record-diary-display" class="input-ctrl" style="color:var(--text-sub);" onclick="editDiary()">寫點備忘心情吧...</div>
-            </div>
-
-            <div id="custom-name-container" style="display: none; flex-direction: column; gap: 6px;">
-                <label style="font-size:13px; font-weight:bold; color:var(--text-sub);">自訂名稱</label>
-                <div id="record-custom-name-display" class="input-ctrl" style="color:var(--text-sub);" onclick="editCustomName()">輸入自訂分類名稱...</div>
-            </div>
-
-            <div class="record-cat-grid" id="record-cat-grid"></div>
-        </div>
-
-        <div class="record-bottom-calc-area">
-            <div class="drawer-handle-wrap" id="calc-drag-area">
-                <div class="drawer-handle"></div>
-            </div>
-
-            <div class="calc-screen-box">
-                <div class="calc-display" id="record-amount">0</div>
-            </div>
-
-            <div class="record-date-ctrl">
-                <button class="record-date-btn" onclick="adjustRecordDate(-1)">◀</button>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span id="record-date-today-badge" style="display: none;">今日</span>
-                    <span class="record-date-text" id="record-date-display">加載中...</span>
-                    <span id="record-date-weekday" style="color: var(--text-sub); font-weight: bold;">-</span>
-                </div>
-                <button class="record-date-btn" onclick="adjustRecordDate(1)">▶</button>
-            </div>
-
-            <div class="calc-keyboard-grid">
-                <button class="calc-btn btn-num" onclick="pressRecordCalc('7')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M20,12 C28,11.5 35,13 40,12 C36,18 30,26 26,32" /></svg></button>
-                <button class="calc-btn btn-num" onclick="pressRecordCalc('8')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M30,20 C23,17 25,9 31,11 C37,13 33,20 30,20 C25,21 23,31 30,31 C37,31 35,21 30,20" /></svg></button>
-                <button class="calc-btn btn-num" onclick="pressRecordCalc('9')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M38,16 C38,10 26,10 26,17 C26,24 38,23 38,16 C38,22 36,28 30,32" /></svg></button>
-                <button class="calc-btn btn-op" onclick="pressRecordCalc('÷')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M18,20 C28,19 38,21 42,20" /><path d="M30,11 C32,11 31,9 29,10 C28,11 30,12 30,11" /><path d="M30,29 C31,28 30,31 29,30 C29,29 30,29 30,29" /></svg></button>
-                <button class="calc-btn btn-c" onclick="pressRecordCalc('C')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M16,30 L22,12 L28,30 M18,24 L26,24 M44,16 C34,12 30,22 34,30 C38,34 46,30 46,24" /></svg></button>
-                
-                <button class="calc-btn btn-num" onclick="pressRecordCalc('4')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M34,10 C28,18 22,23 18,24 C25,25 35,23.5 42,24" /><path d="M34,18 C35,23 34,28 34,32" /></svg></button>
-                <button class="calc-btn btn-num" onclick="pressRecordCalc('5')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M38,11 C29,12 24,11.5 22,11 C21,17 21,20 23,20 C29,19 38,22 36,29 C34,34 22,32 20,29" /></svg></button>
-                <button class="calc-btn btn-num" onclick="pressRecordCalc('6')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M36,11 C26,16 20,22 22,27 C24,32 36,32 36,25 C36,19 26,20 25,25" /></svg></button>
-                <button class="calc-btn btn-op" onclick="pressRecordCalc('×')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M20,10 C28,18 35,26 40,30" /><path d="M40,10 C32,18 25,25 20,30" /></svg></button>
-                <button class="calc-btn btn-back" onclick="pressRecordCalc('BACK')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M40,20 L20,20 M28,12 L20,20 L28,28" /></svg></button>
-                
-                <button class="calc-btn btn-num" onclick="pressRecordCalc('1')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M24,15 C28,13 31,10 32,11 C31,18 32,26 32,31" /></svg></button>
-                <button class="calc-btn btn-num" onclick="pressRecordCalc('2')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M21,14 C23,10 34,9 34,15 C34,21 28,26 22,31 C28,31 36,30.5 38,31" /></svg></button>
-                <button class="calc-btn btn-num" onclick="pressRecordCalc('3')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M22,12 C30,11 36,13 32,19 C38,22 34,31 24,29" /></svg></button>
-                <button class="calc-btn btn-op" onclick="pressRecordCalc('+')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M18,20 C28,19 34,21 42,20" /><path d="M30,9 C29,18 31,26 30,32" /></svg></button>
-                <button class="calc-btn btn-eq" style="grid-row: span 2;" onclick="pressRecordCalc('OK')"><svg class="handdrawn-font-svg" viewBox="0 0 60 90"><path d="M15,40 L45,40 M15,50 L45,50" /></svg></button>
-                
-                <button class="calc-btn btn-num" style="grid-column: span 2;" onclick="pressRecordCalc('0')"><svg class="handdrawn-font-svg" viewBox="0 0 100 40"><path d="M50,10 C38,10 36,30 50,30 C64,30 62,10 50,10" /></svg></button>
-                <button class="calc-btn btn-num" onclick="pressRecordCalc('.')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M30,26 C31.5,26 31.5,28 30,28 C28.5,28 28.5,26 30,26" /></svg></button>
-                <button class="calc-btn btn-op" onclick="pressRecordCalc('-')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M18,20 C28,18.5 34,21.5 42,20" /></svg></button>
-            </div>
-        </div>
-    </div>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
-            authDomain: "family-accounting-c1b45.firebaseapp.com",
-            databaseURL: "https://family-accounting-c1b45-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "family-accounting-c1b45",
-            storageBucket: "family-accounting-c1b45.firebasestorage.app",
-            messagingSenderId: "449484149495",
-            appId: "1:449484149495:web:e4006e9fbc72c14649b9f2"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
-        const auth = getAuth(app);
-        const provider = new GoogleAuthProvider();
-        const recordsRef = ref(db, 'records');
-
-        window.signInWithGoogle = function() {
-            document.getElementById('login-error-msg').style.display = 'none';
-            // 加入強制選擇帳號的參數，解決登出再登入不會跳出選擇框的問題
-            provider.setCustomParameters({ prompt: 'select_account' });
-            
-            signInWithPopup(auth, provider).catch(err => {
-                console.log(err);
-                document.getElementById('login-error-msg').style.display = 'block';
-            });
-        };
-
-        window.signOutGoogle = function() {
-            signOut(auth).then(() => location.reload()); // 登出但不清空本地儲存
-        };
-
-        // 監聽登入狀態：控制全螢幕登入畫面的顯示與隱藏
-        onAuthStateChanged(auth, (user) => {
-            const loginScreen = document.getElementById('login-screen');
-            const statusText = document.getElementById('sidebar-auth-status');
-            const logoutBtn = document.getElementById('sidebar-google-logout-btn');
-            const loginBtn = document.getElementById('sidebar-google-login-btn');
-
-            if (user) {
-                // 已登入：隱藏登入屏，顯示主畫面並拉取資料
-                loginScreen.style.display = 'none';
-                statusText.innerText = `已登入: ${user.email}`;
-                logoutBtn.style.display = 'flex';
-                loginBtn.style.display = 'none';
-                startDatabaseSync();
-            } else {
-                // 未登入：強制顯示登入屏 (但可點擊本機版跳過)
-                statusText.innerText = '尚未登入 (本機模式)';
-                logoutBtn.style.display = 'none';
-                loginBtn.style.display = 'flex';
-                
-                // 優先從 LocalStorage 讀取資料，實現離線優先
-                let localStr = localStorage.getItem('family_accounting_records');
-                if (localStr) {
-                    try { window.records = JSON.parse(localStr); } catch(e) { window.records = []; }
-                } else {
-                    window.records = [];
-                }
-
-                if (typeof window.syncHeaderDisplay === 'function') {
-                    window.syncHeaderDisplay();
-                }
-            }
-        });
-
-        function startDatabaseSync() {
-            onValue(recordsRef, (snapshot) => {
-                const data = snapshot.val();
-                let cloudRecords = [];
-                if (data) {
-                    cloudRecords = Array.isArray(data) ? data : Object.values(data);
-                    cloudRecords = cloudRecords.filter(r => r !== null);
-                }
-
-                // 將雲端資料與本地資料合併 (以 ID 為準)
-                let localStr = localStorage.getItem('family_accounting_records');
-                let localRecords = localStr ? JSON.parse(localStr) : [];
-                
-                let mergedMap = new Map();
-                // 預設先放入雲端資料
-                cloudRecords.forEach(r => mergedMap.set(r.id, r));
-                
-                let hasNewLocal = false;
-                // 加入本地資料 (如果雲端沒有這筆，代表是離線時新增的，需要補傳)
-                localRecords.forEach(r => {
-                    if (!mergedMap.has(r.id)) {
-                        mergedMap.set(r.id, r);
-                        hasNewLocal = true;
-                    }
-                });
-                
-                let finalRecords = Array.from(mergedMap.values()).sort((a, b) => b.id - a.id);
-                window.records = finalRecords;
-                
-                // 存回本地
-                localStorage.setItem('family_accounting_records', JSON.stringify(finalRecords));
-                
-                // 如果有本地新增的資料未上傳，自動補推到雲端
-                if (hasNewLocal && auth.currentUser) {
-                    set(recordsRef, finalRecords).catch(e => console.log('Sync Error:', e));
-                }
-
-                if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
-                if (document.getElementById('calendarModal') && document.getElementById('calendarModal').classList.contains('active')) {
-                    if (typeof window.renderGridCalendar === 'function') window.renderGridCalendar();
-                    if (typeof window.renderModalDateRecords === 'function') window.renderModalDateRecords();
-                }
-            }, (error) => {
-                if (error.code === 'PERMISSION_DENIED') {
-                    document.getElementById('sidebar-auth-status').innerText = '帳號驗證失敗';
-                    signOut(auth);
-                }
-            });
-        }
-
-        window.saveToFirebase = function(recordsArray) {
-            // 1. 無論是否登入，優先儲存到本地 LocalStorage
-            localStorage.setItem('family_accounting_records', JSON.stringify(recordsArray));
-            
-            // 2. 若有網路且已登入，則自動上傳至雲端
-            if (auth.currentUser && navigator.onLine !== false) {
-                set(recordsRef, recordsArray).catch(error => {
-                    if(error.code === 'PERMISSION_DENIED') {
-                        alert("您沒有權限修改資料，請確認是否在白名單內。");
-                    }
-                });
-            }
-        };
-    </script>
-
-    <script>
-        window.addEventListener('load', function() {
-            setTimeout(function() { window.scrollTo(0, 1); }, 0);
-        });
-
-        // 建立今日動態日期
-        const _nowDate = new Date();
-        const _y = _nowDate.getFullYear();
-        const _m = _nowDate.getMonth();
-        const _mStr = String(_m + 1).padStart(2, '0');
-        const _dStr = String(_nowDate.getDate()).padStart(2, '0');
-        
-        let viewMode = 'month'; 
-        let currentSelectedYear = _y;
-        let currentSelectedMonth = _m; 
-        let selectedDateStr = `${_y}-${_mStr}-${_dStr}`; 
-        let displayYear = _y; 
-        let displayMonth = _m; 
-        
-        // --- 登入控制 ---
-        window.skipLogin = function() {
-            document.getElementById('login-screen').style.display = 'none';
-            if (typeof window.syncHeaderDisplay === 'function') {
-                window.syncHeaderDisplay();
-            }
-        };
-
-        /* --- 側邊欄控制 --- */
-        function openSettings() {
-            document.getElementById('settings-sidebar').classList.add('active');
-            document.getElementById('settings-overlay').classList.add('active');
-        }
-        function closeSettings() {
-            document.getElementById('settings-sidebar').classList.remove('active');
-            document.getElementById('settings-overlay').classList.remove('active');
-        }
-        window.openSettings = openSettings;
-        window.closeSettings = closeSettings;
-
-        const categories = {
-            expense: ['🍔 餐飲飲食', '🚌 交通出行', '🛍️ 購物消費', '🏠 房租', '🎬 娛樂生活', '💡 固網水電', '🩺 醫療健康', '👗 服飾鞋包', '🛒 居家百貨', '📚 進修學習', '🤝 社交交際', '✨ 美容保養', '🐾 寵物花費', '🏋️ 運動健身', '🎨 其他'],
-            income: ['💼 薪資收入', '📈 投資理財', '🎁 收到紅包', '💻 兼職副業', '💰 獎金補貼', '🤝 經營分紅', '📦 網拍二手', '♻️ 其它收入', '🎨 其他']
-        };
-
-        const monsterEmojiList = [
-            '🍕','🍟','🌭','🍿','🍳','☕','🥤','🍺','🥂','🍣','🍜','🍦','🚗','🚌','🛍️','🛒','🎮','🎬',
-            '🎤','🎧','🎨','🎪','🏠','💡','🚿','🐈','🐕','📱','📚','✏️','🩺','💊','💵','🪙','💳','💎','💰','🎁',
-            '👗','👔','👟','💄','🧴','🏋️','⚽','🚴','✈️','🚄','🏝️','⛺'
-        ];
-
-        var records = []; // 初始化由 Firebase 或 LocalStorage 覆寫
-        let selectedCustomIconModal = '🎨';
-        let selectedCustomIconRecord = '🎨';
-        let pendingDeleteId = null; 
-        let animationProgress = 0;
-        let chartAnimationFrameId = null;
-        let recordState = { mode: 'add', id: null, type: 'expense', category: '', date: new Date(), expression: '', amount: 0, diary: '' };
-
-        let coinsArray = [];
-        let globalTotalIncome = 0; 
-        let coinCanvas, coinCtx;
-        let shineX = -50; 
-
-        const colDefs = [
-            { id: 0, x: 110, baseY: 140, maxC: 9,  zOrder: 0 }, { id: 1, x: 135, baseY: 138, maxC: 11, zOrder: 0 },
-            { id: 2, x: 165, baseY: 135, maxC: 12, zOrder: 0 }, { id: 3, x: 190, baseY: 138, maxC: 10, zOrder: 0 },
-            { id: 4, x: 215, baseY: 142, maxC: 8,  zOrder: 0 }, { id: 5, x: 125, baseY: 155, maxC: 8,  zOrder: 1 },
-            { id: 6, x: 155, baseY: 152, maxC: 9,  zOrder: 1 }, { id: 7, x: 180, baseY: 158, maxC: 8,  zOrder: 1 },
-            { id: 8, x: 205, baseY: 160, maxC: 6,  zOrder: 1 }, { id: 9,  x: 140, baseY: 172, maxC: 6,  zOrder: 2 },
-            { id: 10, x: 165, baseY: 170, maxC: 7,  zOrder: 2 }, { id: 11, x: 190, baseY: 175, maxC: 5,  zOrder: 2 },
-            { id: 12, x: 150, baseY: 188, maxC: 4,  zOrder: 3 }, { id: 13, x: 175, baseY: 185, maxC: 4,  zOrder: 3 }
-        ];
-
-        window.onload = function() {
-            updateThemeButtonIcon();
-            buildEmojiPickerGrid();
-            renderMonthButtonsGrid();
-            coinCanvas = document.getElementById('coinDropCanvas');
-            coinCtx = coinCanvas.getContext('2d');
-            
-            syncHeaderDisplay();
-            initCoinLoop();
-            initDragHandle();
-            initChartSwipe();
-            initCalendarSwipe();
-            
-            document.getElementById('cal-swipe-track').addEventListener('click', function(e) {
-                const cell = e.target.closest('.cal-day');
-                if (cell && !cell.classList.contains('cal-week-title')) {
-                    selectedDateStr = cell.getAttribute('data-date');
-                    document.getElementById('selected-date-label').innerText = `📍 選定日期：${selectedDateStr}`;
-                    renderGridCalendar();
-                    renderModalDateRecords();
-                }
-            });
-        };
-
-        function syncHeaderDisplay() {
-            const btn = document.getElementById('view-mode-toggle-btn');
-            const centerPicker = document.getElementById('center-month-picker-trigger');
-            const centerTitle = document.getElementById('chart-center-title');
-            const monthLabel = document.getElementById('current-display-month-label');
-
-            if (viewMode === 'all') {
-                btn.innerText = '總'; centerPicker.style.opacity = '0.3'; centerTitle.innerText = '總結餘';
-            } else {
-                btn.innerText = '月'; centerPicker.style.opacity = '1'; centerTitle.innerText = '月結餘';
-                monthLabel.innerText = `${currentSelectedYear}年 ${currentSelectedMonth + 1}月`;
-            }
-            updateDashboard(); renderHistory();
-        }
-
-        window.syncHeaderDisplay = syncHeaderDisplay;
-
-        function toggleViewMode() { viewMode = viewMode === 'month' ? 'all' : 'month'; syncHeaderDisplay(); }
-
-        function drawStaticDonut(canvas, income, expense) {
-            const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const centerX = canvas.width / 2; const centerY = canvas.height / 2;
-            const outerRadius = (canvas.width / 2) - 18; const innerRadius = 135; 
-            const strokeStyleColor = getComputedStyle(document.documentElement).getPropertyValue('--black-stroke').trim() || '#222222';
-
-            if (income === 0 && expense === 0) {
-                ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI, true);
-                ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor;
-                ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.stroke();
-                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); ctx.stroke(); ctx.restore(); return;
-            }
-
-            const totalSum = income + expense; const expenseShare = expense / totalSum; const incomeShare = income / totalSum;
-            const totalAvailableAngle = 2 * Math.PI; const expenseAngleLength = totalAvailableAngle * expenseShare;
-            const incomeAngleLength = totalAvailableAngle * incomeShare; const startOrigin = -Math.PI * 0.5; 
-
-            let expStart = startOrigin; let expEnd = expStart + expenseAngleLength;
-            let incStart = expEnd; let incEnd = incStart + incomeAngleLength;
-
-            const drawSegment = (sAngle, eAngle, faceColor) => {
-                let actualGap = (income > 0 && expense > 0) ? 9 : 0;
-                const maxAllowedGapOut = Math.min(expenseAngleLength, incomeAngleLength) * outerRadius * 0.45;
-                if (actualGap > maxAllowedGapOut) actualGap = maxAllowedGapOut;
-                const halfGap = actualGap; 
-                let outA1 = sAngle + Math.asin(halfGap / outerRadius); let outA2 = eAngle - Math.asin(halfGap / outerRadius);
-                let inA1 = sAngle + Math.asin(halfGap / innerRadius); let inA2 = eAngle - Math.asin(halfGap / innerRadius);
-
-                if (outA2 < outA1) { let m = (sAngle+eAngle)/2; outA1 = m; outA2 = m; }
-                if (inA2 < inA1) { let m = (sAngle+eAngle)/2; inA1 = m; inA2 = m; }
-
-                ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, outA1, outA2); ctx.arc(centerX, centerY, innerRadius, inA2, inA1, true); ctx.closePath();
-                ctx.save(); ctx.shadowColor = 'rgba(0, 0, 0, 0.08)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 6; ctx.fillStyle = faceColor; ctx.fill(); ctx.restore();
-                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
-            };
-
-            if (expense > 0) drawSegment(expStart, expEnd, '#f7a3b6');
-            if (income > 0) drawSegment(incStart, incEnd, '#4ab3e3'); 
-        }
-
-        function createGhostChart(y, m, mode, isPrev) {
-            let inc = 0, exp = 0;
-            if (mode === 'month') {
-                const prefix = `${y}-${(m + 1).toString().padStart(2, '0')}`;
-                records.forEach(r => { if (r.date.startsWith(prefix)) { if (r.type === 'income') inc += r.amount; else exp += r.amount; } });
-            } else {
-                records.forEach(r => { if (r.type === 'income') inc += r.amount; else exp += r.amount; });
-            }
-            const ghost = document.createElement('div'); ghost.className = 'chart-container ghost-chart'; ghost.style.position = 'absolute';
-            const offset = isPrev ? -window.innerWidth : window.innerWidth; ghost.style.left = `calc(50% - 120px + ${offset}px)`; ghost.style.top = '0';
-            const canvas = document.createElement('canvas'); canvas.width = 480; canvas.height = 480; canvas.style.width = '240px'; canvas.style.height = '240px'; canvas.style.display = 'block'; ghost.appendChild(canvas);
-            drawStaticDonut(canvas, inc, exp);
-            const centerText = document.createElement('div'); centerText.className = 'chart-center-text'; let title = mode === 'all' ? '總結餘' : '月結餘';
-            centerText.innerHTML = `<div class="coin-canvas-container" style="width: 100px; height: 65px; margin-top: 8px; margin-bottom: 2px;"></div><span class="title">${title}</span><span class="balance" style="max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">$${(inc - exp).toLocaleString()}</span>`;
-            ghost.appendChild(centerText); return ghost;
-        }
-
-        function initChartSwipe() {
-            const swipeArea = document.querySelector('.header-dashboard'); const swipeTarget = document.getElementById('chart-swipe-track');
-            let touchStartX = 0; let currentTouchX = 0; let isSwiping = false; let hasAddedGhosts = false;
-
-            swipeArea.addEventListener('touchstart', (e) => { if (e.touches.length > 1) return; touchStartX = e.touches[0].clientX; currentTouchX = touchStartX; isSwiping = true; hasAddedGhosts = false; swipeTarget.style.transition = 'none'; document.querySelectorAll('.ghost-chart').forEach(el => el.remove()); }, {passive: true});
-            swipeArea.addEventListener('touchmove', (e) => {
-                if (!isSwiping) return; currentTouchX = e.touches[0].clientX; let deltaX = currentTouchX - touchStartX;
-                const today = new Date(); const realYear = today.getFullYear(); const realMonth = today.getMonth();
-                let isAtRightEdge = (viewMode === 'all'); if (isAtRightEdge && deltaX < 0) { deltaX = deltaX * 0.3; }
-                let isGoingToAll = (!isAtRightEdge && deltaX < 0 && (currentSelectedYear > realYear || (currentSelectedYear === realYear && currentSelectedMonth >= realMonth)));
-                if (!hasAddedGhosts && Math.abs(deltaX) > 5) {
-                    hasAddedGhosts = true;
-                    let pY = currentSelectedYear; let pM = currentSelectedMonth - 1; let pMode = 'month';
-                    if (viewMode === 'all') { pY = realYear; pM = realMonth; } else if (pM < 0) { pM = 11; pY--; }
-                    swipeTarget.appendChild(createGhostChart(pY, pM, pMode, true));
-                    let nY = currentSelectedYear; let nM = currentSelectedMonth + 1; let nMode = 'month';
-                    if (isGoingToAll || viewMode === 'all') { nMode = 'all'; nY = null; nM = null; } else if (nM > 11) { nM = 0; nY++; }
-                    if (!(viewMode === 'all' && deltaX < 0)) { swipeTarget.appendChild(createGhostChart(nY, nM, nMode, false)); }
-                }
-                swipeTarget.style.transform = `translateX(${deltaX}px)`;
-            }, {passive: true});
-
-            swipeArea.addEventListener('touchend', (e) => {
-                if (!isSwiping) return; isSwiping = false; let deltaX = currentTouchX - touchStartX; const threshold = window.innerWidth * 0.2; 
-                let isAtRightEdge = (viewMode === 'all'); let direction = 0; 
-                if (deltaX > threshold) { direction = -1; } else if (deltaX < -threshold && !isAtRightEdge) { direction = 1; }
-                if (direction !== 0) { navigateSwipe(direction); } else { swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)'; swipeTarget.style.transform = `translateX(0)`; setTimeout(() => { document.querySelectorAll('.ghost-chart').forEach(el => el.remove()); }, 500); }
-            });
-
-            function navigateSwipe(direction) {
-                const today = new Date(); const realYear = today.getFullYear(); const realMonth = today.getMonth();
-                let targetTransformX = direction === 1 ? -window.innerWidth : window.innerWidth;
-                swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)'; swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
-                setTimeout(() => {
-                    if (direction === 1) { 
-                        if (currentSelectedYear > realYear || (currentSelectedYear === realYear && currentSelectedMonth >= realMonth)) { viewMode = 'all'; } else { currentSelectedMonth++; if (currentSelectedMonth > 11) { currentSelectedMonth = 0; currentSelectedYear++; } }
-                    } else { 
-                        if (viewMode === 'all') { viewMode = 'month'; currentSelectedYear = realYear; currentSelectedMonth = realMonth; } else { currentSelectedMonth--; if (currentSelectedMonth < 0) { currentSelectedMonth = 11; currentSelectedYear--; } }
-                    }
-                    document.querySelectorAll('.ghost-chart').forEach(el => el.remove()); swipeTarget.style.transition = 'none'; swipeTarget.style.transform = `translateX(0)`; syncHeaderDisplay(); 
-                }, 500);
-            }
-        }
-
-        function initCalendarSwipe() {
-            const swipeArea = document.getElementById('cal-swipe-viewport');
-            const swipeTarget = document.getElementById('cal-swipe-track');
-            let touchStartX = 0; let currentTouchX = 0; let isSwiping = false; let hasAddedGhosts = false;
-
-            swipeArea.addEventListener('touchstart', (e) => {
-                if (e.touches.length > 1) return;
-                touchStartX = e.touches[0].clientX; currentTouchX = touchStartX; isSwiping = true; hasAddedGhosts = false;
-                swipeTarget.style.transition = 'none';
-                document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
-            }, {passive: true});
-
-            swipeArea.addEventListener('touchmove', (e) => {
-                if (!isSwiping) return;
-                currentTouchX = e.touches[0].clientX; let deltaX = currentTouchX - touchStartX;
-                
-                if (!hasAddedGhosts && Math.abs(deltaX) > 5) {
-                    hasAddedGhosts = true;
-                    let pY = displayYear; let pM = displayMonth - 1; if (pM < 0) { pM = 11; pY--; }
-                    swipeTarget.appendChild(createGhostCal(pY, pM, true));
-                    let nY = displayYear; let nM = displayMonth + 1; if (nM > 11) { nM = 0; nY++; }
-                    swipeTarget.appendChild(createGhostCal(nY, nM, false));
-                }
-                swipeTarget.style.transform = `translateX(${deltaX}px)`;
-            }, {passive: true});
-
-            swipeArea.addEventListener('touchend', (e) => {
-                if (!isSwiping) return;
-                isSwiping = false; let deltaX = currentTouchX - touchStartX; const threshold = swipeArea.offsetWidth * 0.2;
-                let direction = 0;
-                if (deltaX > threshold) { direction = -1; } else if (deltaX < -threshold) { direction = 1; }
-                
-                if (direction !== 0) {
-                    let targetTransformX = direction === 1 ? -(swipeArea.offsetWidth + 20) : (swipeArea.offsetWidth + 20);
-                    swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)';
-                    swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
-                    setTimeout(() => {
-                        adjustCalendarMonth(direction);
-                        document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
-                        swipeTarget.style.transition = 'none';
-                        swipeTarget.style.transform = `translateX(0)`;
-                    }, 500);
-                } else {
-                    swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)';
-                    swipeTarget.style.transform = `translateX(0)`;
-                    setTimeout(() => { document.querySelectorAll('.ghost-cal').forEach(el => el.remove()); }, 500);
-                }
-            });
-        }
-
-        function createGhostCal(y, m, isPrev) {
-            const ghost = document.createElement('div');
-            ghost.className = 'calendar-grid ghost-cal';
-            ghost.style.position = 'absolute'; ghost.style.top = '0'; ghost.style.width = '100%';
-            ghost.style.left = isPrev ? 'calc(-100% - 20px)' : 'calc(100% + 20px)';
-            ghost.innerHTML = generateCalendarHTML(y, m);
-            return ghost;
-        }
-
-        function updateDashboard() {
-            let totalIncome = 0; let totalExpense = 0; const prefix = `${currentSelectedYear}-${(currentSelectedMonth + 1).toString().padStart(2, '0')}`;
-            records.forEach(r => { if (viewMode === 'month' && !r.date.startsWith(prefix)) return; if (r.type === 'income') totalIncome += r.amount; else totalExpense += r.amount; });
-            globalTotalIncome = totalIncome;
-            const currentBalance = totalIncome - totalExpense; document.getElementById('total-balance').innerText = `$${currentBalance.toLocaleString()}`;
-            if (chartAnimationFrameId) cancelAnimationFrame(chartAnimationFrameId); animationProgress = 0; animateDonutChart(totalIncome, totalExpense);
-        }
-
-        function animateDonutChart(income, expense) {
-            animationProgress += 0.03; if (animationProgress > 1) animationProgress = 1;
-            drawSplitDonutChart(income, expense, animationProgress);
-            if (animationProgress < 1) { chartAnimationFrameId = requestAnimationFrame(() => animateDonutChart(income, expense)); }
-        }
-
-        function drawSplitDonutChart(income, expense, progress) {
-            const canvas = document.getElementById('pieChart'); const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const centerX = canvas.width / 2; const centerY = canvas.height / 2; const outerRadius = (canvas.width / 2) - 18; const innerRadius = 135; 
-            const strokeStyleColor = getComputedStyle(document.documentElement).getPropertyValue('--black-stroke').trim() || '#222222';
-            if (income === 0 && expense === 0) {
-                ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI, true);
-                ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.stroke();
-                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); ctx.stroke(); ctx.restore(); return;
-            }
-
-            const totalSum = income + expense; const expenseShare = expense / totalSum; const incomeShare = income / totalSum;
-            const totalAvailableAngle = (2 * Math.PI) * progress; const expenseAngleLength = totalAvailableAngle * expenseShare;
-            const incomeAngleLength = totalAvailableAngle * incomeShare; const startOrigin = -Math.PI * 0.5; 
-            let expStart = startOrigin; let expEnd = expStart + expenseAngleLength; let incStart = expEnd; let incEnd = incStart + incomeAngleLength;
-
-            const drawSegment = (sAngle, eAngle, faceColor) => {
-                let actualGap = (income > 0 && expense > 0) ? (9 * progress) : 0;
-                const maxAllowedGapOut = Math.min(expenseAngleLength, incomeAngleLength) * outerRadius * 0.45;
-                if (actualGap > maxAllowedGapOut) actualGap = maxAllowedGapOut; const halfGap = actualGap; 
-                let outA1 = sAngle + Math.asin(halfGap / outerRadius); let outA2 = eAngle - Math.asin(halfGap / outerRadius);
-                let inA1 = sAngle + Math.asin(halfGap / innerRadius); let inA2 = eAngle - Math.asin(halfGap / innerRadius);
-
-                if (outA2 < outA1) { let m = (sAngle+eAngle)/2; outA1 = m; outA2 = m; } if (inA2 < inA1) { let m = (sAngle+eAngle)/2; inA1 = m; inA2 = m; }
-                ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, outA1, outA2); ctx.arc(centerX, centerY, innerRadius, inA2, inA1, true); ctx.closePath();
-                ctx.save(); ctx.shadowColor = 'rgba(0, 0, 0, 0.08)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 6; ctx.fillStyle = faceColor; ctx.fill(); ctx.restore();
-                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
-            };
-            if (expense > 0) drawSegment(expStart, expEnd, '#f7a3b6');
-            if (income > 0) drawSegment(incStart, incEnd, '#4ab3e3'); 
-        }
-
-        function initCoinLoop() {
-            function updateAndRenderCoins() {
-                coinCtx.clearRect(0, 0, coinCanvas.width, coinCanvas.height); const strokeColor = getComputedStyle(document.documentElement).getPropertyValue('--black-stroke').trim() || '#222222';
-                let targetTotalCoins = 0; if (globalTotalIncome >= 1) { targetTotalCoins = 1 + Math.floor((Math.min(globalTotalIncome, 80000) - 1) / 1000); }
-                let colCounts = new Array(colDefs.length).fill(0); let allocated = 0; let availableCols = Array.from({length: colDefs.length}, (_, i) => i);
-                
-                while (allocated < targetTotalCoins && availableCols.length > 0) {
-                    let rIdx = Math.floor(Math.random() * availableCols.length); let cId = availableCols[rIdx];
-                    if (colCounts[cId] < colDefs[cId].maxC) { colCounts[cId]++; allocated++; } else { availableCols.splice(rIdx, 1); }
-                }
-
-                let currentActiveCount = coinsArray.length;
-                if (currentActiveCount < targetTotalCoins && Math.random() < 0.25) {
-                    let activeCols = colDefs.filter(c => coinsArray.filter(coin => coin.colIndex === c.id).length < colCounts[c.id]);
-                    if (activeCols.length > 0) {
-                        let chosenDef = activeCols[Math.floor(Math.random() * activeCols.length)]; let chosenCol = chosenDef.id;
-                        let coinHeightIndex = coinsArray.filter(c => c.colIndex === chosenCol).length;
-                        let coinW = 38; let coinH = 12; let stackSpacing = 6; let targetY = chosenDef.baseY - (coinHeightIndex * stackSpacing);
-                        coinsArray.push({ x: chosenDef.x, y: -20, vy: 2.5 + Math.random() * 2, isStatic: false, w: coinW, h: coinH, colIndex: chosenCol, targetY: targetY });
-                    }
-                }
-
-                if (coinsArray.length > targetTotalCoins) {
-                    for (let i = 0; i < colDefs.length; i++) {
-                        let colCoins = coinsArray.filter(c => c.colIndex === i);
-                        while (colCoins.length > colCounts[i]) {
-                            colCoins.sort((a, b) => a.targetY - b.targetY); let coinToRemove = colCoins[0];
-                            coinsArray = coinsArray.filter(c => c !== coinToRemove); colCoins = coinsArray.filter(c => c.colIndex === i);
+                        
+                        // 🌟 先本地儲存變更
+                        if (auth.currentUser) {
+                            const emailKey = auth.currentUser.email.replace(/\./g, ',');
+                            localStorage.setItem('records_' + emailKey, JSON.stringify(records));
                         }
-                    }
-                    while (coinsArray.length > targetTotalCoins) coinsArray.pop();
-                }
-
-                for (let z = 0; z <= 3; z++) {
-                    let colsInZ = colDefs.filter(c => c.zOrder === z);
-                    colsInZ.forEach(colDef => {
-                        let colCoins = coinsArray.filter(c => c.colIndex === colDef.id); colCoins.sort((a, b) => b.targetY - a.targetY);
-                        colCoins.forEach(c => {
-                            if (!c.isStatic) { c.y += c.vy; if (c.y >= c.targetY) { c.y = c.targetY; c.isStatic = true; } }
-                            coinCtx.save(); const thickH = 3; 
-                            coinCtx.beginPath(); coinCtx.ellipse(c.x, c.y + thickH, c.w / 2, c.h / 2, 0, 0, Math.PI); coinCtx.lineTo(c.x - c.w / 2, c.y);
-                            coinCtx.ellipse(c.x, c.y, c.w / 2, c.h / 2, 0, Math.PI, 0, true); coinCtx.lineTo(c.x + c.w / 2, c.y + thickH);
-                            coinCtx.fillStyle = '#d99e14'; coinCtx.fill(); coinCtx.lineWidth = 1.8; coinCtx.strokeStyle = strokeColor; coinCtx.stroke();
-                            
-                            coinCtx.beginPath(); coinCtx.ellipse(c.x, c.y, c.w / 2, c.h / 2, 0, 0, 2 * Math.PI); coinCtx.fillStyle = '#ffc44d'; coinCtx.fill(); coinCtx.stroke();
-                            coinCtx.beginPath(); coinCtx.ellipse(c.x, c.y, c.w / 3.8, c.h / 3.8, 0, 0, 2 * Math.PI); coinCtx.strokeStyle = 'rgba(217, 158, 20, 0.85)'; coinCtx.lineWidth = 1.2; coinCtx.stroke();
-                            coinCtx.restore();
-                        });
-                    });
-                }
-                shineX += 1.8; if (shineX > coinCanvas.width + 100) shineX = -60; 
-                coinCtx.save(); coinCtx.globalCompositeOperation = 'source-atop'; coinCtx.beginPath(); coinCtx.moveTo(shineX, 0); coinCtx.lineTo(shineX + 35, 0);
-                coinCtx.lineTo(shineX - 25, coinCanvas.height); coinCtx.lineTo(shineX - 60, coinCanvas.height); coinCtx.closePath();
-                coinCtx.fillStyle = 'rgba(255, 255, 255, 0.45)'; coinCtx.fill(); coinCtx.restore();
-                requestAnimationFrame(updateAndRenderCoins);
-            }
-            requestAnimationFrame(updateAndRenderCoins);
-        }
-
-        function openDeleteModal(id) { pendingDeleteId = id; document.getElementById('deleteConfirmModal').classList.add('active'); }
-        function closeDeleteModal() { pendingDeleteId = null; document.getElementById('deleteConfirmModal').classList.remove('active'); }
-        function executeDeleteRecord() {
-            if (pendingDeleteId) {
-                records = records.filter(r => r.id !== pendingDeleteId);
-                if (window.saveToFirebase) window.saveToFirebase(records);
-                closeDeleteModal(); closeRecordModal();
-                syncHeaderDisplay();
-            }
-        }
-
-        function openCalendarModal() { displayYear = currentSelectedYear; displayMonth = currentSelectedMonth; document.getElementById('calendarModal').classList.add('active'); renderGridCalendar(); renderModalDateRecords(); }
-        function closeCalendarModal(e) { if (e === null || e.target === document.getElementById('calendarModal')) document.getElementById('calendarModal').classList.remove('active'); }
-        function adjustCalendarMonth(delta) { displayMonth += delta; if (displayMonth < 0) { displayMonth = 11; displayYear--; } if (displayMonth > 11) { displayMonth = 0; displayYear++; } renderGridCalendar(); }
-
-        function generateCalendarHTML(year, month) {
-            let html = '';
-            const weeks = ['一', '二', '三', '四', '五', '六', '日'];
-            weeks.forEach(w => { html += `<div class="cal-week-title">${w}</div>`; });
-
-            const firstDay = new Date(year, month, 1); let firstDayOfWeek = firstDay.getDay(); firstDayOfWeek = (firstDayOfWeek === 0) ? 6 : firstDayOfWeek - 1;
-            const prevLastDate = new Date(year, month, 0).getDate();
-            for (let i = firstDayOfWeek - 1; i >= 0; i--) { html += buildDayCellHTML(month === 0 ? year - 1 : year, month === 0 ? 11 : month - 1, prevLastDate - i, true); }
-            const currLastDate = new Date(year, month + 1, 0).getDate();
-            for (let d = 1; d <= currLastDate; d++) { html += buildDayCellHTML(year, month, d, false); }
-            const totalCells = firstDayOfWeek + currLastDate; const remaining = (7 - (totalCells % 7)) % 7;
-            for (let nextD = 1; nextD <= remaining; nextD++) { html += buildDayCellHTML(month === 11 ? year + 1 : year, month === 11 ? 0 : month + 1, nextD, true); }
-            return html;
-        }
-
-        function buildDayCellHTML(year, month, day, isBlur) {
-            const cellDateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-            let cls = 'cal-day';
-            if (isBlur) cls += ' blur-day';
-            
-            // 使用動態計算的今日日期
-            const _t = new Date();
-            const todayISO = `${_t.getFullYear()}-${String(_t.getMonth() + 1).padStart(2, '0')}-${String(_t.getDate()).padStart(2, '0')}`;
-            if (cellDateStr === todayISO) cls += ' today-circle';
-            
-            if (cellDateStr === selectedDateStr) cls += ' selected-circle';
-            let dot = records.some(r => r.date === cellDateStr) ? '<div class="day-dot"></div>' : '';
-            return `<div class="${cls}" data-date="${cellDateStr}">${day}${dot}</div>`;
-        }
-
-        function renderGridCalendar() {
-            document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
-            const gridContainer = document.getElementById('calendar-grid-container');
-            gridContainer.innerHTML = generateCalendarHTML(displayYear, displayMonth);
-        }
-
-        function renderModalDateRecords() {
-            const container = document.getElementById('modal-date-records'); container.innerHTML = '';
-            const dayRecords = records.filter(r => r.date === selectedDateStr);
-            if (dayRecords.length === 0) { container.innerHTML = `<div style="text-align:center; padding:18px; font-size:13px; color:#bbb;">📍 該日尚無收支明細</div>`; return; }
-            dayRecords.forEach(item => {
-                const itemDiv = document.createElement('div'); itemDiv.className = 'history-item'; itemDiv.style.cssText = 'border: 1.5px solid #222; border-radius:12px; margin-bottom:8px; box-shadow:0 3px 0 #222;';
-                itemDiv.onclick = () => openRecordModal(item.id);
-                const icon = item.category.split(' ')[0] || '📝'; const name = item.category.substring(icon.length).trim() || item.category;
-                
-                itemDiv.innerHTML = `
-                    <div class="item-left">
-                        <div class="item-icon" style="width:30px; height:30px; font-size:14px;">${icon}</div>
-                        <div class="item-info"><span class="item-category" style="font-size:13px;">${name}</span></div>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <span style="font-weight:bold; font-size:14px; color:${item.type==='income'?'var(--income-color)':'var(--expense-color)'}">
-                            ${item.type==='income'?'+':'-'}$${item.amount.toLocaleString()}
-                        </span>
-                        <button class="list-action-delete-btn" style="min-height:28px; padding:4px 8px;" onclick="event.stopPropagation(); openDeleteModal(${item.id})">刪除</button>
-                    </div>
-                `;
-                container.appendChild(itemDiv);
-            });
-        }
-
-        function executeAdd(amount, category, date, diary, forcedType) {
-            const newR = { id: Date.now(), type: forcedType, amount: amount, category: category, date: date, diary: diary };
-            records.unshift(newR); 
-            if (window.saveToFirebase) window.saveToFirebase(records);
-            const recordDate = new Date(date); currentSelectedYear = recordDate.getFullYear(); currentSelectedMonth = recordDate.getMonth();
-            viewMode = 'month';
-            syncHeaderDisplay();
-        }
-
-        function openMonthModal() { document.getElementById('monthModal').classList.add('active'); renderMonthButtonsGrid(); }
-        function closeMonthModal(e) { if (e === null || e.target === document.getElementById('monthModal')) document.getElementById('monthModal').classList.remove('active'); }
-        function renderMonthButtonsGrid() {
-            const container = document.getElementById('month-buttons-target'); container.innerHTML = '';
-            for (let m = 0; m < 12; m++) {
-                const btn = document.createElement('button'); btn.className = `month-cell-btn ${m === currentSelectedMonth ? 'active' : ''}`; btn.innerText = `${m + 1} 月`;
-                btn.onclick = function() { currentSelectedMonth = m; viewMode = 'month'; syncHeaderDisplay(); closeMonthModal(null); };
-                container.appendChild(btn);
-            }
-        }
-
-        function toggleTheme() { 
-            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light'; const targetTheme = currentTheme === 'dark' ? 'light' : 'dark'; 
-            document.documentElement.setAttribute('data-theme', targetTheme); localStorage.setItem('apple-app-theme', targetTheme); 
-            const metaTheme = document.getElementById('theme-color-meta'); if (metaTheme) metaTheme.setAttribute('content', targetTheme === 'dark' ? '#4A3B00' : '#FFD700');
-            updateThemeButtonIcon(); updateDashboard(); 
-        }
-        window.toggleTheme = toggleTheme;
-
-        function updateThemeButtonIcon() { 
-            const theme = document.documentElement.getAttribute('data-theme') || 'light'; 
-            const btn = document.getElementById('sidebar-theme-btn');
-            if (btn) {
-                btn.innerText = theme === 'light' ? '☀️ 明亮模式' : '🌙 暗黑模式';
-            }
-        }
-        function buildEmojiPickerGrid() { const container = document.getElementById('emoji-grid-target'); container.innerHTML = ''; monsterEmojiList.forEach(emoji => { const item = document.createElement('div'); item.className = 'emoji-item'; item.innerText = emoji; item.onclick = function() { selectEmoji(emoji); }; container.appendChild(item); }); }
-        
-        let currentActiveIconSource = 'record';
-        function openEmojiPicker(source) { currentActiveIconSource = source; document.getElementById('emojiModal').classList.add('active'); }
-        function closeEmojiModal() { document.getElementById('emojiModal').classList.remove('active'); }
-        function selectEmoji(emoji) { 
-            if (currentActiveIconSource === 'modal') { 
-                selectedCustomIconModal = emoji; document.getElementById('custom-icon-preview-modal').innerText = emoji; 
-            } else if (currentActiveIconSource === 'record') { 
-                selectedCustomIconRecord = emoji; 
-                recordState.category = '其他';
-                renderRecordCategories(); 
-            }
-            closeEmojiModal(); 
-        }
-
-        /* 🚨 系統對話框，自帶 取消/確認 按鈕 */
-        window.editDiary = function() {
-            let current = recordState.diary || '';
-            let res = prompt('請輸入備忘日記：', current);
-            if (res !== null) {
-                recordState.diary = res.trim();
-                if (recordState.diary !== '') {
-                    document.getElementById('record-diary-display').innerText = recordState.diary;
-                    document.getElementById('record-diary-display').style.color = 'var(--text-main)';
-                } else {
-                    document.getElementById('record-diary-display').innerText = '寫點備忘心情吧...';
-                    document.getElementById('record-diary-display').style.color = 'var(--text-sub)';
-                }
-            }
-        };
-
-        window.editCustomName = function() {
-            let current = document.getElementById('record-custom-name-display').innerText;
-            if (current === '輸入自訂分類名稱...') current = '';
-            let res = prompt('請輸入自訂分類名稱：', current);
-            if (res !== null) {
-                let name = res.trim();
-                if (name !== '') {
-                    document.getElementById('record-custom-name-display').innerText = name;
-                    document.getElementById('record-custom-name-display').style.color = 'var(--text-main)';
-                } else {
-                    document.getElementById('record-custom-name-display').innerText = '輸入自訂分類名稱...';
-                    document.getElementById('record-custom-name-display').style.color = 'var(--text-sub)';
-                }
-            }
-        };
-
-        function initDragHandle() {
-            const dragArea = document.getElementById('calc-drag-area'); const bottomArea = document.querySelector('.record-bottom-calc-area');
-            let startY = 0, currentY = 0, isDragging = false, startTransform = 0;
-            dragArea.addEventListener('touchstart', e => { startY = e.touches[0].clientY; currentY = startY; isDragging = true; bottomArea.style.transition = 'none'; const isCollapsed = bottomArea.classList.contains('collapsed'); startTransform = isCollapsed ? (bottomArea.offsetHeight - 96) : 0; }, {passive:true});
-            dragArea.addEventListener('touchmove', e => { if(!isDragging) return; currentY = e.touches[0].clientY; let deltaY = currentY - startY; let newTranslate = startTransform + deltaY; const maxTranslate = bottomArea.offsetHeight - 96; if(newTranslate < 0) newTranslate = 0; if(newTranslate > maxTranslate) newTranslate = maxTranslate; bottomArea.style.transform = `translateY(${newTranslate}px)`; }, {passive:true});
-            dragArea.addEventListener('touchend', e => { if(!isDragging) return; isDragging = false; bottomArea.style.transition = ''; bottomArea.style.transform = ''; let deltaY = currentY - startY; if (Math.abs(deltaY) > 30) { if (deltaY > 0) bottomArea.classList.add('collapsed'); else bottomArea.classList.remove('collapsed'); } });
-            dragArea.addEventListener('click', () => { bottomArea.style.transition = ''; bottomArea.style.transform = ''; bottomArea.classList.toggle('collapsed'); });
-        }
-
-        function toggleCalcDrawer(forceState) {
-            const area = document.querySelector('.record-bottom-calc-area'); area.style.transition = ''; area.style.transform = '';
-            if(forceState === 'collapse') area.classList.add('collapsed'); else if (forceState === 'expand') area.classList.remove('collapsed'); else area.classList.toggle('collapsed');
-        }
-
-        function openAddModal() {
-            // 動態產生今日日期
-            const _td = new Date();
-            const _tdStr = `${_td.getFullYear()}-${String(_td.getMonth() + 1).padStart(2, '0')}-${String(_td.getDate()).padStart(2, '0')}`;
-            
-            recordState.mode = 'add'; recordState.id = Date.now(); recordState.type = 'expense'; recordState.category = categories['expense'][0]; recordState.date = new Date(_tdStr); recordState.expression = ''; recordState.amount = 0; recordState.diary = '';
-            selectedCustomIconRecord = '🎨';
-            document.getElementById('record-modal-title').innerText = '新增帳目'; document.getElementById('record-delete-btn').style.display = 'none'; document.getElementById('record-amount').innerText = '0';
-            
-            // 重置文字顯示
-            document.getElementById('record-diary-display').innerText = '寫點備忘心情吧...';
-            document.getElementById('record-diary-display').style.color = 'var(--text-sub)';
-            document.getElementById('record-custom-name-display').innerText = '輸入自訂分類名稱...';
-            document.getElementById('record-custom-name-display').style.color = 'var(--text-sub)';
-
-            setRecordType('expense', true); updateRecordDateDisplay(); toggleCalcDrawer('expand'); document.getElementById('recordModal').classList.add('active');
-        }
-
-        function openRecordModal(id) {
-            const record = records.find(r => r.id === id); if (!record) return;
-            recordState.mode = 'edit'; recordState.id = record.id; recordState.type = record.type; recordState.category = record.category; recordState.date = new Date(record.date); recordState.expression = ''; recordState.amount = record.amount; recordState.diary = record.diary || '';
-            
-            const isCustom = record.category.includes('其他') || !categories[record.type].includes(record.category);
-            if (isCustom) { 
-                selectedCustomIconRecord = recordState.category.split(' ')[0] || '🎨'; 
-                let customName = recordState.category.substring(selectedCustomIconRecord.length).trim();
-                if (customName === '其他' || customName === '') {
-                    document.getElementById('record-custom-name-display').innerText = '輸入自訂分類名稱...';
-                    document.getElementById('record-custom-name-display').style.color = 'var(--text-sub)';
-                } else {
-                    document.getElementById('record-custom-name-display').innerText = customName;
-                    document.getElementById('record-custom-name-display').style.color = 'var(--text-main)';
-                }
-            } else {
-                document.getElementById('record-custom-name-display').innerText = '輸入自訂分類名稱...';
-                document.getElementById('record-custom-name-display').style.color = 'var(--text-sub)';
-            }
-
-            if (recordState.diary) {
-                document.getElementById('record-diary-display').innerText = recordState.diary;
-                document.getElementById('record-diary-display').style.color = 'var(--text-main)';
-            } else {
-                document.getElementById('record-diary-display').innerText = '寫點備忘心情吧...';
-                document.getElementById('record-diary-display').style.color = 'var(--text-sub)';
-            }
-
-            document.getElementById('record-modal-title').innerText = '修改帳目'; document.getElementById('record-delete-btn').style.display = 'block'; document.getElementById('record-amount').innerText = recordState.amount;
-            setRecordType(recordState.type, false); updateRecordDateDisplay(); toggleCalcDrawer('expand'); document.getElementById('recordModal').classList.add('active');
-        }
-
-        function closeRecordModal() { 
-            document.getElementById('recordModal').classList.remove('active'); 
-        }
-
-        function setRecordType(type, resetCat = true) {
-            recordState.type = type; document.getElementById('record-type-exp').classList.toggle('active', type === 'expense'); document.getElementById('record-type-inc').classList.toggle('active', type === 'income');
-            if (resetCat && categories[type].length > 0) { recordState.category = categories[type][0]; } renderRecordCategories();
-        }
-
-        function renderRecordCategories() {
-            const grid = document.getElementById('record-cat-grid'); grid.innerHTML = '';
-            
-            const isCurrentCustom = recordState.category.includes('其他') || !categories[recordState.type].includes(recordState.category);
-
-            categories[recordState.type].forEach(cat => {
-                const isOtherButton = cat.includes('其他'); 
-                let isMatch = false;
-                
-                if (isOtherButton && isCurrentCustom) {
-                    isMatch = true;
-                } else if (!isOtherButton && recordState.category === cat) {
-                    isMatch = true;
-                }
-
-                const icon = isOtherButton ? (isMatch ? selectedCustomIconRecord : '🎨') : (cat.split(' ')[0] || '📝');
-                const name = isOtherButton ? '自訂' : (cat.substring(icon.length).trim() || cat);
-
-                const div = document.createElement('div'); div.className = `record-cat-item ${isMatch ? 'active' : ''}`;
-                div.onclick = () => { 
-                    if (isOtherButton) {
-                        recordState.category = '其他';
-                        openEmojiPicker('record'); 
-                        document.getElementById('custom-name-container').style.display = 'flex';
-                    } else {
-                        recordState.category = cat; 
-                        document.getElementById('custom-name-container').style.display = 'none';
-                        renderRecordCategories(); 
-                    }
-                };
-                div.innerHTML = `<div class="record-cat-icon">${icon}</div><span>${name}</span>`; grid.appendChild(div);
-            });
-
-            document.getElementById('custom-name-container').style.display = isCurrentCustom ? 'flex' : 'none';
-        }
-
-        function updateRecordDateDisplay() {
-            const year = recordState.date.getFullYear(); const month = String(recordState.date.getMonth() + 1).padStart(2, '0'); const day = String(recordState.date.getDate()).padStart(2, '0'); const dateStr = `${year}-${month}-${day}`; document.getElementById('record-date-display').innerText = dateStr;
-            const today = new Date(); const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`; const badge = document.getElementById('record-date-today-badge');
-            if (dateStr === todayStr) { badge.style.display = 'inline-block'; } else { badge.style.display = 'none'; }
-            const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']; document.getElementById('record-date-weekday').innerText = weekDays[recordState.date.getDay()];
-        }
-
-        function adjustRecordDate(days) { recordState.date.setDate(recordState.date.getDate() + days); updateRecordDateDisplay(); }
-        function promptDeleteRecord() { openDeleteModal(recordState.id); }
-
-        function pressRecordCalc(val) {
-            const mainDisp = document.getElementById('record-amount'); const ops = ['+', '-', '×', '÷'];
-            if (val === 'C') { recordState.expression = ''; mainDisp.innerText = '0'; } 
-            else if (val === 'BACK') {
-                if (recordState.expression.length > 0) { recordState.expression = recordState.expression.slice(0, -1); } else { let amtStr = mainDisp.innerText.toString(); if (amtStr.length > 1) { mainDisp.innerText = amtStr.slice(0, -1); } else { mainDisp.innerText = '0'; } }
-                if (recordState.expression) { try { let s = recordState.expression.replace(/×/g, '*').replace(/÷/g, '/'); if (ops.includes(recordState.expression.slice(-1))) s = s.slice(0, -1); if (s) mainDisp.innerText = Math.round(eval(s) * 100) / 100; } catch(e) {} } else if (mainDisp.innerText === '') { mainDisp.innerText = '0'; }
-            } else if (val === 'OK') {
-                let finalAmt = parseFloat(mainDisp.innerText);
-                if (recordState.expression) { try { let s = recordState.expression.replace(/×/g, '*').replace(/÷/g, '/'); let f = eval(s); if (!isNaN(f) && isFinite(f)) finalAmt = f; } catch (e) {} }
-                finalAmt = Math.round(finalAmt * 100) / 100; if (finalAmt <= 0) { alert('請輸入有效金額！'); return; }
-                
-                const year = recordState.date.getFullYear(); const month = String(recordState.date.getMonth() + 1).padStart(2, '0'); const day = String(recordState.date.getDate()).padStart(2, '0'); const dateStr = `${year}-${month}-${day}`; 
-                
-                const newDiary = recordState.diary || '';
-                
-                const isCurrentCustom = recordState.category.includes('其他') || !categories[recordState.type].includes(recordState.category);
-                let finalCat = recordState.category;
-                if (isCurrentCustom) {
-                    let customName = document.getElementById('record-custom-name-display').innerText;
-                    if (customName === '輸入自訂分類名稱...' || customName.trim() === '') {
-                        customName = '其他';
-                    }
-                    finalCat = `${selectedCustomIconRecord} ${customName}`;
-                }
-                
-                if (recordState.mode === 'add') {
-                    executeAdd(finalAmt, finalCat, dateStr, newDiary, recordState.type);
-                } else {
-                    const index = records.findIndex(r => r.id === recordState.id);
-                    if (index !== -1) {
-                        records[index] = { id: recordState.id, type: recordState.type, amount: finalAmt, category: finalCat, date: dateStr, diary: newDiary };
+                        
+                        // 後台靜默同步雲端
                         if (window.saveToFirebase) window.saveToFirebase(records);
+                        
                         currentSelectedYear = year; currentSelectedMonth = recordState.date.getMonth(); viewMode = 'month';
                         syncHeaderDisplay();
                     }
