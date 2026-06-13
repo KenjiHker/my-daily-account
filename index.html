@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>家庭記帳日記 - 專屬雲端版</title>
+    <title>家庭記帳日記 - 除錯修復版</title>
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -12,7 +12,6 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
     
     <style>
-        /* --- 徹底還原完美無留白佈局，並將底色轉為金黃色 --- */
         html { 
             background-color: var(--bg-color); 
             width: 100vw; 
@@ -80,7 +79,6 @@
             pointer-events: none;
         }
 
-        /* --- 強制登入畫面 --- */
         #login-screen {
             position: fixed;
             top: 0; left: 0;
@@ -272,13 +270,12 @@
     
     <div id="toast-container"></div>
 
-    <!-- 移除了本機版按鈕，只保留 Google 登入 -->
     <div id="login-screen">
         <h1 class="login-title">家庭記帳日記</h1>
         <button id="main-login-btn" class="google-btn" onclick="signInWithGoogle()" style="width: 80%; max-width: 320px; height: 50px;">
             <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google"> 授權 Google 帳號登入
         </button>
-        <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 16px; display: none; text-align: center;"></p>
+        <p id="login-error-msg" style="color: #4ab3e3; font-size: 14px; font-weight: bold; margin-top: 16px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
@@ -483,7 +480,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-        // ✨ 改回使用 signInWithPopup
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -527,23 +523,25 @@
            }
         });
 
-        // 🌟 改回彈出視窗登入，解決 iOS 頁面跳轉出錯問題
+        // 登入按鈕
         window.signInWithGoogle = function() {
-            document.getElementById('login-error-msg').style.display = 'none';
+            const errorMsg = document.getElementById('login-error-msg');
+            errorMsg.innerText = "準備彈出 Google 登入視窗...";
+            errorMsg.style.color = "#4ab3e3";
+            errorMsg.style.display = 'block';
+
             provider.setCustomParameters({ prompt: 'select_account' });
             
             signInWithPopup(auth, provider).catch(err => {
                 console.log(err);
-                const errorMsg = document.getElementById('login-error-msg');
-                errorMsg.innerText = "❌ 登入失敗或被取消";
+                errorMsg.innerText = "❌ 登入失敗或被取消\n" + err.message;
                 errorMsg.style.color = "#ff5b5b";
-                errorMsg.style.display = 'block';
             });
         };
 
         window.signOutGoogle = function() {
             if(auth.currentUser) {
-                const emailKey = auth.currentUser.email.replace(/\./g, ',');
+                const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
                 localStorage.removeItem('records_' + emailKey);
             }
             signOut(auth).then(() => location.reload());
@@ -558,33 +556,41 @@
             const loginBtn = document.getElementById('sidebar-google-login-btn');
 
             if (user) {
-                const emailKey = user.email.replace(/\./g, ',');
+                // 自動將 Email 轉做細楷防撞 Bug
+                const emailKey = user.email.toLowerCase().replace(/\./g, ',');
                 statusText.innerText = `已登入:\n${user.email}`;
                 logoutBtn.style.display = 'flex';
                 loginBtn.style.display = 'none';
                 
-                // 🚀 核心優化：檢查有無本機快取
+                // 第一步報備
+                errorMsg.innerText = "✅ Google 登入成功！\n🔄 正在準備向雲端請求資料(如果卡住請截圖)...";
+                errorMsg.style.color = "#4ab3e3";
+                errorMsg.style.display = 'block';
+                mainLoginBtn.style.display = 'none';
+
+                // 檢查有無本機快取
                 const localData = localStorage.getItem('records_' + emailKey);
-                
                 if (localData) {
-                    // 有快取：0 秒直接跳過登入頁，畫面即時呈現
-                    window.records = JSON.parse(localData);
-                    loginScreen.style.display = 'none';
-                    if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
-                } else {
-                    // 無快取（第一次登入或換新機）：顯示正在載入
-                    mainLoginBtn.style.display = 'none';
-                    errorMsg.innerText = "⏳ 初次登入，正在載入雲端資料...";
-                    errorMsg.style.color = "var(--text-sub)";
-                    errorMsg.style.display = 'block';
+                    try {
+                        window.records = JSON.parse(localData);
+                        loginScreen.style.display = 'none';
+                        if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
+                    } catch(e) {
+                        console.error("Local Storage parse error", e);
+                        localStorage.removeItem('records_' + emailKey);
+                    }
                 }
 
                 // 啟動背後雲端查核及同步
-                recordsRef = ref(db, 'users/' + emailKey + '/records');
-                startDatabaseSync(emailKey); 
+                try {
+                    recordsRef = ref(db, 'users/' + emailKey + '/records');
+                    startDatabaseSync(emailKey); 
+                } catch(e) {
+                    errorMsg.innerText = "❌ 建立連線時發生錯誤：\n" + e.message;
+                    errorMsg.style.color = "#ff5b5b";
+                }
 
             } else {
-                // 尚未登入
                 loginScreen.style.display = 'flex';
                 mainLoginBtn.style.display = 'flex';
                 errorMsg.style.display = 'none';
@@ -602,33 +608,44 @@
             if (!recordsRef) return;
             
             onValue(recordsRef, (snapshot) => {
-                // 雲端驗證成功！如果是第一次登入，而家先收起登入畫面
-                document.getElementById('login-screen').style.display = 'none';
+                const errorMsg = document.getElementById('login-error-msg');
+                errorMsg.innerText = "📥 正在處理雲端下載嘅資料...";
 
-                const data = snapshot.val();
-                let cloudRecords = [];
-                if (data) {
-                    cloudRecords = Object.values(data).filter(r => r !== null);
+                try {
+                    const data = snapshot.val();
+                    let cloudRecords = [];
+                    if (data) {
+                        // 終極防護網：過濾晒所有奇怪嘅、錯格式嘅 Firebase 資料
+                        cloudRecords = Object.values(data).filter(r => r !== null && typeof r === 'object' && r.id);
+                    }
+
+                    // 重新排序並安全儲存
+                    window.records = cloudRecords.sort((a, b) => (b.id || 0) - (a.id || 0));
+                    localStorage.setItem('records_' + emailKey, JSON.stringify(window.records));
+
+                    // 處理完畢，安全解鎖畫面
+                    document.getElementById('login-screen').style.display = 'none';
+
+                    if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
+                    if (document.getElementById('calendarModal') && document.getElementById('calendarModal').classList.contains('active')) {
+                        if (typeof window.renderGridCalendar === 'function') window.renderGridCalendar();
+                        if (typeof window.renderModalDateRecords === 'function') window.renderModalDateRecords();
+                    }
+                } catch(err) {
+                    // 如果處理資料時發生任何 Crash，會喺呢度顯示
+                    console.error(err);
+                    document.getElementById('login-error-msg').innerText = "❌ 處理雲端資料時出錯：\n" + err.message + "\n(請將呢個畫面截圖畀我睇)";
+                    document.getElementById('login-error-msg').style.color = "#ff5b5b";
+                    document.getElementById('main-login-btn').style.display = 'flex';
                 }
 
-                // 刷新資料並更新手機快取
-                window.records = cloudRecords.sort((a, b) => b.id - a.id);
-                localStorage.setItem('records_' + emailKey, JSON.stringify(window.records));
-
-                if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
-                if (document.getElementById('calendarModal') && document.getElementById('calendarModal').classList.contains('active')) {
-                    if (typeof window.renderGridCalendar === 'function') window.renderGridCalendar();
-                    if (typeof window.renderModalDateRecords === 'function') window.renderModalDateRecords();
-                }
             }, (error) => {
                 console.error("Firebase Read Error:", error);
                 if (error.code === 'PERMISSION_DENIED') {
-                    // 🚨 終極安全機制：如果 Firebase 發現冇權限，即刻踢出！
+                    // 被踢出白名單嘅人，立刻粉碎本地紀錄並鎖死
                     localStorage.removeItem('records_' + emailKey);
                     window.records = [];
                     if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
-                    
-                    signOut(auth); // 強制登出
                     
                     let currentEmail = auth.currentUser ? auth.currentUser.email : '未知';
                     document.getElementById('sidebar-auth-status').innerText = '無權限存取';
@@ -638,11 +655,15 @@
                     document.getElementById('main-login-btn').style.display = 'flex';
                     
                     const msgEl = document.getElementById('login-error-msg');
-                    msgEl.innerText = `⚠️ 權限不足！\n你的 Email 未被加入白名單，無法進入首頁。`;
+                    msgEl.innerText = `⚠️ 權限不足！\n你的 Email:\n【${currentEmail}】\n未被加入白名單，無法進入首頁。`;
                     msgEl.style.color = "#ff5b5b";
                     msgEl.style.display = 'block';
+                    
+                    signOut(auth); // 強制登出
                 } else {
-                    showToast("❌ 同步失敗：" + error.message, 5000);
+                    document.getElementById('login-error-msg').innerText = "❌ 讀取失敗：" + error.message;
+                    document.getElementById('login-error-msg').style.color = "#ff5b5b";
+                    document.getElementById('main-login-btn').style.display = 'flex';
                 }
             });
         }
@@ -1040,13 +1061,11 @@
             if (pendingDeleteId) {
                 records = records.filter(r => r.id !== pendingDeleteId);
                 
-                // 🌟 先本地儲存變更
                 if (auth.currentUser) {
-                    const emailKey = auth.currentUser.email.replace(/\./g, ',');
+                    const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
                     localStorage.setItem('records_' + emailKey, JSON.stringify(records));
                 }
                 
-                // 後台自動同步雲端
                 if (window.saveToFirebase) window.saveToFirebase(records);
                 
                 closeDeleteModal(); closeRecordModal();
@@ -1122,13 +1141,11 @@
             const newR = { id: Date.now(), type: forcedType, amount: amount, category: category, date: date, diary: diary };
             records.unshift(newR); 
             
-            // 🌟 先本地儲存
             if (auth.currentUser) {
-                const emailKey = auth.currentUser.email.replace(/\./g, ',');
+                const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
                 localStorage.setItem('records_' + emailKey, JSON.stringify(records));
             }
 
-            // 後台靜默同步雲端
             if (window.saveToFirebase) window.saveToFirebase(records);
             
             const recordDate = new Date(date); currentSelectedYear = recordDate.getFullYear(); currentSelectedMonth = recordDate.getMonth();
@@ -1352,13 +1369,11 @@
                     if (index !== -1) {
                         records[index] = { id: recordState.id, type: recordState.type, amount: finalAmt, category: finalCat, date: dateStr, diary: newDiary };
                         
-                        // 🌟 先本地儲存變更
                         if (auth.currentUser) {
-                            const emailKey = auth.currentUser.email.replace(/\./g, ',');
+                            const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
                             localStorage.setItem('records_' + emailKey, JSON.stringify(records));
                         }
                         
-                        // 後台靜默同步雲端
                         if (window.saveToFirebase) window.saveToFirebase(records);
                         
                         currentSelectedYear = year; currentSelectedMonth = recordState.date.getMonth(); viewMode = 'month';
