@@ -512,6 +512,9 @@
         const provider = new GoogleAuthProvider();
         
         let recordsRef = null; 
+        
+        // 🔥 新增：生成專屬呢個瀏覽器畫面嘅獨立 ID
+        const mySessionId = Date.now().toString() + Math.random().toString();
 
         window.showToast = function(msg, duration = 3000) {
             const toast = document.getElementById('toast-container');
@@ -578,6 +581,23 @@
                 errorMsg.style.color = "#4ab3e3";
                 errorMsg.style.display = 'block';
                 mainLoginBtn.style.display = 'none';
+                
+                // 🔥 新增：雙重登入安全踢人監測
+                const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
+                set(sessionRef, mySessionId);
+                onValue(sessionRef, (snap) => {
+                    const activeSession = snap.val();
+                    if (activeSession && activeSession !== mySessionId) {
+                        // 有新裝置或瀏覽器登入，強制將自己登出
+                        showToast('⚠️ 已在其他裝置/瀏覽器登入，您被迫登出！', 4000);
+                        setTimeout(() => {
+                            if(auth.currentUser) {
+                                localStorage.removeItem('records_' + emailKey);
+                            }
+                            signOut(auth).then(() => location.reload());
+                        }, 2500);
+                    }
+                });
 
                 const localData = localStorage.getItem('records_' + emailKey);
                 if (localData) {
@@ -787,7 +807,8 @@
             });
         };
 
-        function syncHeaderDisplay() {
+        // 🔥 修改 1：接收 isSwipe 標記，控制圓餅圖係咪即時畫好唔動畫
+        function syncHeaderDisplay(isSwipe = false) {
             const btn = document.getElementById('view-mode-toggle-btn');
             const centerPicker = document.getElementById('center-month-picker-trigger');
             const centerTitle = document.getElementById('chart-center-title');
@@ -799,12 +820,12 @@
                 btn.innerText = '月'; centerPicker.style.opacity = '1'; centerTitle.innerText = '月結餘';
                 monthLabel.innerText = `${currentSelectedYear}年 ${currentSelectedMonth + 1}月`;
             }
-            updateDashboard(); renderHistory();
+            updateDashboard(isSwipe); renderHistory();
         }
 
         window.syncHeaderDisplay = syncHeaderDisplay;
 
-        function toggleViewMode() { viewMode = viewMode === 'month' ? 'all' : 'month'; syncHeaderDisplay(); }
+        function toggleViewMode() { viewMode = viewMode === 'month' ? 'all' : 'month'; syncHeaderDisplay(false); }
 
         function drawStaticDonut(canvas, income, expense) {
             const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -902,7 +923,12 @@
                     } else { 
                         if (viewMode === 'all') { viewMode = 'month'; currentSelectedYear = realYear; currentSelectedMonth = realMonth; } else { currentSelectedMonth--; if (currentSelectedMonth < 0) { currentSelectedMonth = 11; currentSelectedYear--; } }
                     }
-                    document.querySelectorAll('.ghost-chart').forEach(el => el.remove()); swipeTarget.style.transition = 'none'; swipeTarget.style.transform = `translateX(0)`; syncHeaderDisplay(); 
+                    
+                    // 🔥 修改 1：在滑動結束時，移除重疊動畫，通知即時顯示
+                    swipeTarget.style.transition = 'none'; 
+                    swipeTarget.style.transform = `translateX(0)`; 
+                    document.querySelectorAll('.ghost-chart').forEach(el => el.remove()); 
+                    syncHeaderDisplay(true); // 傳入 true 代表係滑動結束，直接定格無縫接軌
                 }, 500);
             }
         }
@@ -944,10 +970,11 @@
                     swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)';
                     swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
                     setTimeout(() => {
-                        adjustCalendarMonth(direction);
-                        document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
+                        // 🔥 修改 3：日曆閃爍修復 - 先將 Transform 歸零再調整 DOM，避開繪製時間差
                         swipeTarget.style.transition = 'none';
                         swipeTarget.style.transform = `translateX(0)`;
+                        document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
+                        adjustCalendarMonth(direction);
                     }, 500);
                 } else {
                     swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)';
@@ -966,17 +993,28 @@
             return ghost;
         }
 
-        function updateDashboard() {
+        // 🔥 修改 1：接收 isSwipe 以控制是否即時防閃爍渲染
+        function updateDashboard(isSwipe = false) {
             let totalIncome = 0; let totalExpense = 0; const prefix = `${currentSelectedYear}-${(currentSelectedMonth + 1).toString().padStart(2, '0')}`;
             records.forEach(r => { if (viewMode === 'month' && !r.date.startsWith(prefix)) return; if (r.type === 'income') totalIncome += r.amount; else totalExpense += r.amount; });
             globalTotalIncome = totalIncome;
             const currentBalance = totalIncome - totalExpense; document.getElementById('total-balance').innerText = `$${currentBalance.toLocaleString()}`;
             
-            // 🔥 修改 1：防止圓餅圖重複跳動
-            if (totalIncome === prevChartInc && totalExpense === prevChartExp && animationProgress >= 1) return;
+            if (chartAnimationFrameId) cancelAnimationFrame(chartAnimationFrameId); 
+            
+            // 如果唔係滑動，並且數字完全冇變，就無需重繪（防彈出多餘動畫）
+            if (!isSwipe && totalIncome === prevChartInc && totalExpense === prevChartExp && animationProgress >= 1) return;
             prevChartInc = totalIncome; prevChartExp = totalExpense;
 
-            if (chartAnimationFrameId) cancelAnimationFrame(chartAnimationFrameId); animationProgress = 0; animateDonutChart(totalIncome, totalExpense);
+            if (isSwipe) {
+                // 如果係滑動接軌，直接將進度推滿，100% 防閃爍
+                animationProgress = 1;
+                drawSplitDonutChart(totalIncome, totalExpense, 1);
+            } else {
+                // 正常重置動畫
+                animationProgress = 0; 
+                animateDonutChart(totalIncome, totalExpense);
+            }
         }
 
         function animateDonutChart(income, expense) {
@@ -1089,10 +1127,9 @@
         function openCalendarModal() { 
             displayYear = currentSelectedYear; 
             displayMonth = currentSelectedMonth; 
-            // 🔥 修改 3：預設選定日期為今日
+            // 🔥 修改 3：預設選定日期為今日，預設顯示全月數據
             const _td = new Date();
             selectedDateStr = `${_td.getFullYear()}-${String(_td.getMonth() + 1).padStart(2, '0')}-${String(_td.getDate()).padStart(2, '0')}`;
-            // 預設顯示整個月份的數據
             showMonthRecords = true; 
 
             document.getElementById('calendarModal').classList.add('active'); 
@@ -1104,7 +1141,7 @@
             displayMonth += delta; 
             if (displayMonth < 0) { displayMonth = 11; displayYear--; } 
             if (displayMonth > 11) { displayMonth = 0; displayYear++; } 
-            // 🔥 修改 3：換月時重新顯示該月所有數據
+            // 🔥 修改 3：換月時自動切換為顯示該月數據
             showMonthRecords = true; 
             renderGridCalendar(); 
             renderModalDateRecords();
@@ -1149,7 +1186,7 @@
             const container = document.getElementById('modal-date-records'); container.innerHTML = '';
             
             let targetRecords = [];
-            // 🔥 修改 3：根據狀態決定過濾方式
+            // 🔥 修改 3：根據狀態決定過濾方式，若 showMonthRecords 則顯示全月，否則只顯示當日
             if (showMonthRecords) {
                 document.getElementById('selected-date-label').innerText = `📍 ${displayYear}年${displayMonth + 1}月 明細`;
                 const prefix = `${displayYear}-${(displayMonth + 1).toString().padStart(2, '0')}`;
@@ -1164,7 +1201,6 @@
                 return; 
             }
 
-            // 按時間先後排序
             targetRecords.sort((a, b) => {
                 if (a.date !== b.date) return new Date(b.date) - new Date(a.date);
                 return b.id - a.id;
@@ -1175,7 +1211,7 @@
                 itemDiv.onclick = () => openRecordModal(item.id);
                 const icon = item.category.split(' ')[0] || '📝'; const name = item.category.substring(icon.length).trim() || item.category;
                 
-                // 🔥 修改 3：如果是顯示月份數據，加入小日期標籤
+                // 若顯示成個月數據，加入右側小日期牌，方便查看
                 const dateLabel = showMonthRecords ? `<span style="font-size:11px; color:var(--text-sub); margin-left:6px; background:var(--nav-btn-bg); padding:2px 6px; border-radius:6px;">${item.date.split('-').slice(1).join('/')}</span>` : '';
 
                 itemDiv.innerHTML = `
@@ -1297,10 +1333,11 @@
         }
 
         function openAddModal() {
-            const _td = new Date();
-            const _tdStr = `${_td.getFullYear()}-${String(_td.getMonth() + 1).padStart(2, '0')}-${String(_td.getDate()).padStart(2, '0')}`;
+            // 🔥 修改 1：新增資料時，預設讀取 selectedDateStr（如果未點擊日曆，就自動係今日）
+            const parts = selectedDateStr.split('-');
+            const _td = new Date(parts[0], parts[1] - 1, parts[2]);
             
-            recordState.mode = 'add'; recordState.id = Date.now(); recordState.type = 'income'; recordState.category = categories['income'][0]; recordState.date = new Date(_tdStr); recordState.expression = ''; recordState.amount = 0; recordState.diary = '';
+            recordState.mode = 'add'; recordState.id = Date.now(); recordState.type = 'income'; recordState.category = categories['income'][0]; recordState.date = _td; recordState.expression = ''; recordState.amount = 0; recordState.diary = '';
             selectedCustomIconRecord = '🎨';
             document.getElementById('record-modal-title').innerText = '新增帳目'; document.getElementById('record-delete-btn').style.display = 'none'; document.getElementById('record-amount').innerText = '0';
             
@@ -1407,7 +1444,7 @@
             } else if (val === 'OK') {
                 let finalAmt = parseFloat(mainDisp.innerText);
                 if (recordState.expression) { try { let s = recordState.expression.replace(/×/g, '*').replace(/÷/g, '/'); let f = eval(s); if (!isNaN(f) && isFinite(f)) finalAmt = f; } catch (e) {} }
-                finalAmt = Math.round(finalAmt * 100) / 100; if (finalAmt <= 0) { showToast('請輸入有效金額！'); return; }
+                finalAmt = Math.round(finalAmt * 100) / 100; if (finalAmt <= 0 || isNaN(finalAmt)) { showToast('請輸入大於 0 的有效金額！'); return; }
                 
                 const year = recordState.date.getFullYear(); const month = String(recordState.date.getMonth() + 1).padStart(2, '0'); const day = String(recordState.date.getDate()).padStart(2, '0'); const dateStr = `${year}-${month}-${day}`; 
                 const newDiary = recordState.diary || '';
