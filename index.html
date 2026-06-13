@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>家庭記帳日記 - 本地雲端同步版</title>
+    <title>家庭記帳日記 - 終極完美版</title>
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -91,7 +91,7 @@
             justify-content: center;
             padding: 20px;
         }
-        .login-title { font-size: 32px; font-weight: 900; color: var(--text-main); margin-bottom: 40px; } /* 調整了下邊距替代被移除的文字空間 */
+        .login-title { font-size: 32px; font-weight: 900; color: var(--text-main); margin-bottom: 40px; }
 
         #connection-dot {
             font-size: 14px; font-weight: 800; padding: 12px 16px; border-radius: 12px;
@@ -272,10 +272,10 @@
 
     <div id="login-screen">
         <h1 class="login-title">家庭記帳日記</h1>
-        <button class="google-btn" onclick="signInWithGoogle()" style="width: 80%; max-width: 320px; height: 50px;">
+        <button id="main-login-btn" class="google-btn" onclick="signInWithGoogle()" style="width: 80%; max-width: 320px; height: 50px;">
             <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google"> 授權 Google 帳號登入
         </button>
-        <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 16px; display: none; text-align: center;"></p>
+        <p id="login-error-msg" style="color: #4ab3e3; font-size: 14px; font-weight: bold; margin-top: 16px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
@@ -524,20 +524,23 @@
         });
 
         window.signInWithGoogle = function() {
-            document.getElementById('login-error-msg').style.display = 'none';
+            const errorMsg = document.getElementById('login-error-msg');
+            errorMsg.innerText = "準備彈出 Google 登入視窗...";
+            errorMsg.style.color = "#4ab3e3";
+            errorMsg.style.display = 'block';
+
             provider.setCustomParameters({ prompt: 'select_account' });
             
             signInWithPopup(auth, provider).catch(err => {
                 console.log(err);
-                document.getElementById('login-error-msg').innerText = "❌ 登入失敗或被取消";
-                document.getElementById('login-error-msg').style.display = 'block';
+                errorMsg.innerText = "❌ 登入失敗或被取消\n" + err.message;
+                errorMsg.style.color = "#ff5b5b";
             });
         };
 
         window.signOutGoogle = function() {
-            // 登出時順便清除手機快取
             if(auth.currentUser) {
-                const emailKey = auth.currentUser.email.replace(/\./g, ',');
+                const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
                 localStorage.removeItem('records_' + emailKey);
             }
             signOut(auth).then(() => location.reload());
@@ -545,43 +548,54 @@
 
         onAuthStateChanged(auth, (user) => {
             const loginScreen = document.getElementById('login-screen');
+            const errorMsg = document.getElementById('login-error-msg');
+            const mainLoginBtn = document.getElementById('main-login-btn');
             const statusText = document.getElementById('sidebar-auth-status');
             const logoutBtn = document.getElementById('sidebar-google-logout-btn');
             const loginBtn = document.getElementById('sidebar-google-login-btn');
 
             if (user) {
-                const emailKey = user.email.replace(/\./g, ',');
+                const emailKey = user.email.toLowerCase().replace(/\./g, ',');
                 statusText.innerText = `已登入:\n${user.email}`;
                 logoutBtn.style.display = 'flex';
                 loginBtn.style.display = 'none';
                 
-                recordsRef = ref(db, 'users/' + emailKey + '/records');
-                
-                // 🌟 1. 【本地優先】第一時間從本地快取撈資料，實現「免等秒進首頁」
+                errorMsg.innerText = "✅ Google 登入成功！\n🔄 正在準備向雲端請求資料(如果卡住請截圖)...";
+                errorMsg.style.color = "#4ab3e3";
+                errorMsg.style.display = 'block';
+                mainLoginBtn.style.display = 'none';
+
                 const localData = localStorage.getItem('records_' + emailKey);
                 if (localData) {
-                    window.records = JSON.parse(localData);
-                    loginScreen.style.display = 'none'; // 🚀 0秒直接跳過登入頁面
-                    if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
-                } else {
-                    // 如果這部電話是第一次登入、完全無本地快取，才顯示背景同步中
-                    document.getElementById('login-error-msg').innerText = "⏳ 正在驗證權限並初次同步雲端...";
-                    document.getElementById('login-error-msg').style.color = "var(--text-sub)";
-                    document.getElementById('login-error-msg').style.display = 'block';
+                    try {
+                        window.records = JSON.parse(localData);
+                        loginScreen.style.display = 'none';
+                        if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
+                    } catch(e) {
+                        console.error("Local Storage parse error", e);
+                        localStorage.removeItem('records_' + emailKey);
+                    }
                 }
-                
-                // 🌟 2. 【後台同步】讓 Firebase 在背景默默同步雲端，不阻礙用戶操作
-                startDatabaseSync(emailKey); 
+
+                try {
+                    recordsRef = ref(db, 'users/' + emailKey + '/records');
+                    startDatabaseSync(emailKey); 
+                } catch(e) {
+                    errorMsg.innerText = "❌ 建立連線時發生錯誤：\n" + e.message;
+                    errorMsg.style.color = "#ff5b5b";
+                }
+
             } else {
                 loginScreen.style.display = 'flex';
+                mainLoginBtn.style.display = 'flex';
+                errorMsg.style.display = 'none';
+                
                 statusText.innerText = '尚未登入';
                 logoutBtn.style.display = 'none';
                 loginBtn.style.display = 'flex';
                 
                 window.records = []; 
-                if (typeof window.syncHeaderDisplay === 'function') {
-                    window.syncHeaderDisplay();
-                }
+                if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
             }
         });
 
@@ -589,46 +603,57 @@
             if (!recordsRef) return;
             
             onValue(recordsRef, (snapshot) => {
-                // 雲端拉到資料了，以防剛才本地快取是空的，此時解鎖
-                document.getElementById('login-screen').style.display = 'none';
+                const errorMsg = document.getElementById('login-error-msg');
+                errorMsg.innerText = "📥 正在處理雲端下載嘅資料...";
 
-                const data = snapshot.val();
-                let cloudRecords = [];
-                if (data) {
-                    cloudRecords = Object.values(data).filter(r => r !== null);
+                try {
+                    const data = snapshot.val();
+                    let cloudRecords = [];
+                    if (data) {
+                        cloudRecords = Object.values(data).filter(r => r !== null && typeof r === 'object' && r.id);
+                    }
+
+                    window.records = cloudRecords.sort((a, b) => (b.id || 0) - (a.id || 0));
+                    localStorage.setItem('records_' + emailKey, JSON.stringify(window.records));
+
+                    document.getElementById('login-screen').style.display = 'none';
+
+                    if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
+                    if (document.getElementById('calendarModal') && document.getElementById('calendarModal').classList.contains('active')) {
+                        if (typeof window.renderGridCalendar === 'function') window.renderGridCalendar();
+                        if (typeof window.renderModalDateRecords === 'function') window.renderModalDateRecords();
+                    }
+                } catch(err) {
+                    console.error(err);
+                    document.getElementById('login-error-msg').innerText = "❌ 處理雲端資料時出錯：\n" + err.message;
+                    document.getElementById('login-error-msg').style.color = "#ff5b5b";
+                    document.getElementById('main-login-btn').style.display = 'flex';
                 }
 
-                // 排序並覆蓋最新數據
-                window.records = cloudRecords.sort((a, b) => b.id - a.id);
-                
-                // 🌟 同步更新到本地儲存，確保下次開網頁擁有最新快取
-                localStorage.setItem('records_' + emailKey, JSON.stringify(window.records));
-
-                if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
-                if (document.getElementById('calendarModal') && document.getElementById('calendarModal').classList.contains('active')) {
-                    if (typeof window.renderGridCalendar === 'function') window.renderGridCalendar();
-                    if (typeof window.renderModalDateRecords === 'function') window.renderModalDateRecords();
-                }
             }, (error) => {
                 console.error("Firebase Read Error:", error);
                 if (error.code === 'PERMISSION_DENIED') {
-                    // 🚨 如果黑客或非白名單用戶登入，立刻強制粉碎本地快取並一腳踢走
                     localStorage.removeItem('records_' + emailKey);
                     window.records = [];
                     if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
-
+                    
                     let currentEmail = auth.currentUser ? auth.currentUser.email : '未知';
-                    document.getElementById('sidebar-auth-status').innerText = '無權限存取 (白名單阻擋)';
+                    document.getElementById('sidebar-auth-status').innerText = '無權限存取';
                     
                     const loginScreen = document.getElementById('login-screen');
                     loginScreen.style.display = 'flex';
+                    document.getElementById('main-login-btn').style.display = 'flex';
                     
                     const msgEl = document.getElementById('login-error-msg');
-                    msgEl.innerText = `⚠️ 權限不足！\n你的 Email:\n【 ${currentEmail} 】\n未被加入白名單，無法進入首頁。`;
+                    msgEl.innerText = `⚠️ 權限不足！\n你的 Email:\n【${currentEmail}】\n未被加入白名單，無法進入首頁。`;
                     msgEl.style.color = "#ff5b5b";
                     msgEl.style.display = 'block';
+                    
+                    signOut(auth);
                 } else {
-                    showToast("❌ 同步失敗：" + error.message, 5000);
+                    document.getElementById('login-error-msg').innerText = "❌ 讀取失敗：" + error.message;
+                    document.getElementById('login-error-msg').style.color = "#ff5b5b";
+                    document.getElementById('main-login-btn').style.display = 'flex';
                 }
             });
         }
@@ -640,7 +665,6 @@
                     recordsObj[record.id] = record;
                 });
 
-                // 默默直接上傳雲端，不再讓用戶做任何多餘的選擇
                 set(recordsRef, recordsObj)
                     .then(() => showToast("☁️ 雲端同步成功！"))
                     .catch(error => {
@@ -765,8 +789,8 @@
             if (income === 0 && expense === 0) {
                 ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI, true);
                 ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor;
-                ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); stroke();
-                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); stroke(); ctx.restore(); return;
+                ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.stroke();
+                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); ctx.stroke(); ctx.restore(); return;
             }
 
             const totalSum = income + expense; const expenseShare = expense / totalSum; const incomeShare = income / totalSum;
@@ -789,7 +813,7 @@
 
                 ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, outA1, outA2); ctx.arc(centerX, centerY, innerRadius, inA2, inA1, true); ctx.closePath();
                 ctx.save(); ctx.shadowColor = 'rgba(0, 0, 0, 0.08)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 6; ctx.fillStyle = faceColor; ctx.fill(); ctx.restore();
-                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; stroke(); ctx.restore();
+                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
             };
 
             if (expense > 0) drawSegment(expStart, expEnd, '#f7a3b6');
@@ -936,8 +960,8 @@
             const strokeStyleColor = getComputedStyle(document.documentElement).getPropertyValue('--black-stroke').trim() || '#222222';
             if (income === 0 && expense === 0) {
                 ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI, true);
-                ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); stroke();
-                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); stroke(); ctx.restore(); return;
+                ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.stroke();
+                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); ctx.stroke(); ctx.restore(); return;
             }
 
             const totalSum = income + expense; const expenseShare = expense / totalSum; const incomeShare = income / totalSum;
@@ -948,15 +972,14 @@
             const drawSegment = (sAngle, eAngle, faceColor) => {
                 let actualGap = (income > 0 && expense > 0) ? (9 * progress) : 0;
                 const maxAllowedGapOut = Math.min(expenseAngleLength, incomeAngleLength) * outerRadius * 0.45;
-                if (actualGap > maxAllowedGapOut) actualGap = maxAllowedGapOut;
-                const halfGap = actualGap; 
+                if (actualGap > maxAllowedGapOut) actualGap = maxAllowedGapOut; const halfGap = actualGap; 
                 let outA1 = sAngle + Math.asin(halfGap / outerRadius); let outA2 = eAngle - Math.asin(halfGap / outerRadius);
                 let inA1 = sAngle + Math.asin(halfGap / innerRadius); let inA2 = eAngle - Math.asin(halfGap / innerRadius);
 
                 if (outA2 < outA1) { let m = (sAngle+eAngle)/2; outA1 = m; outA2 = m; } if (inA2 < inA1) { let m = (sAngle+eAngle)/2; inA1 = m; inA2 = m; }
                 ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, outA1, outA2); ctx.arc(centerX, centerY, innerRadius, inA2, inA1, true); ctx.closePath();
                 ctx.save(); ctx.shadowColor = 'rgba(0, 0, 0, 0.08)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 6; ctx.fillStyle = faceColor; ctx.fill(); ctx.restore();
-                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; stroke(); ctx.restore();
+                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
             };
             if (expense > 0) drawSegment(expStart, expEnd, '#f7a3b6');
             if (income > 0) drawSegment(incStart, incEnd, '#4ab3e3'); 
@@ -1004,10 +1027,10 @@
                             coinCtx.save(); const thickH = 3; 
                             coinCtx.beginPath(); coinCtx.ellipse(c.x, c.y + thickH, c.w / 2, c.h / 2, 0, 0, Math.PI); coinCtx.lineTo(c.x - c.w / 2, c.y);
                             coinCtx.ellipse(c.x, c.y, c.w / 2, c.h / 2, 0, Math.PI, 0, true); coinCtx.lineTo(c.x + c.w / 2, c.y + thickH);
-                            coinCtx.fillStyle = '#d99e14'; coinCtx.fill(); coinCtx.lineWidth = 1.8; coinCtx.strokeStyle = strokeColor; stroke();
+                            coinCtx.fillStyle = '#d99e14'; coinCtx.fill(); coinCtx.lineWidth = 1.8; coinCtx.strokeStyle = strokeColor; coinCtx.stroke();
                             
-                            coinCtx.beginPath(); coinCtx.ellipse(c.x, c.y, c.w / 2, c.h / 2, 0, 0, 2 * Math.PI); coinCtx.fillStyle = '#ffc44d'; coinCtx.fill(); stroke();
-                            coinCtx.beginPath(); coinCtx.ellipse(c.x, c.y, c.w / 3.8, c.h / 3.8, 0, 0, 2 * Math.PI); coinCtx.strokeStyle = 'rgba(217, 158, 20, 0.85)'; coinCtx.lineWidth = 1.2; stroke();
+                            coinCtx.beginPath(); coinCtx.ellipse(c.x, c.y, c.w / 2, c.h / 2, 0, 0, 2 * Math.PI); coinCtx.fillStyle = '#ffc44d'; coinCtx.fill(); coinCtx.stroke();
+                            coinCtx.beginPath(); coinCtx.ellipse(c.x, c.y, c.w / 3.8, c.h / 3.8, 0, 0, 2 * Math.PI); coinCtx.strokeStyle = 'rgba(217, 158, 20, 0.85)'; coinCtx.lineWidth = 1.2; coinCtx.stroke();
                             coinCtx.restore();
                         });
                     });
@@ -1028,13 +1051,11 @@
             if (pendingDeleteId) {
                 records = records.filter(r => r.id !== pendingDeleteId);
                 
-                // 🌟 先本地儲存變更
                 if (auth.currentUser) {
-                    const emailKey = auth.currentUser.email.replace(/\./g, ',');
+                    const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
                     localStorage.setItem('records_' + emailKey, JSON.stringify(records));
                 }
                 
-                // 後台自動同步雲端
                 if (window.saveToFirebase) window.saveToFirebase(records);
                 
                 closeDeleteModal(); closeRecordModal();
@@ -1110,13 +1131,11 @@
             const newR = { id: Date.now(), type: forcedType, amount: amount, category: category, date: date, diary: diary };
             records.unshift(newR); 
             
-            // 🌟 先本地儲存
             if (auth.currentUser) {
-                const emailKey = auth.currentUser.email.replace(/\./g, ',');
+                const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
                 localStorage.setItem('records_' + emailKey, JSON.stringify(records));
             }
 
-            // 後台靜默同步雲端
             if (window.saveToFirebase) window.saveToFirebase(records);
             
             const recordDate = new Date(date); currentSelectedYear = recordDate.getFullYear(); currentSelectedMonth = recordDate.getMonth();
@@ -1340,13 +1359,11 @@
                     if (index !== -1) {
                         records[index] = { id: recordState.id, type: recordState.type, amount: finalAmt, category: finalCat, date: dateStr, diary: newDiary };
                         
-                        // 🌟 先本地儲存變更
                         if (auth.currentUser) {
-                            const emailKey = auth.currentUser.email.replace(/\./g, ',');
+                            const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
                             localStorage.setItem('records_' + emailKey, JSON.stringify(records));
                         }
                         
-                        // 後台靜默同步雲端
                         if (window.saveToFirebase) window.saveToFirebase(records);
                         
                         currentSelectedYear = year; currentSelectedMonth = recordState.date.getMonth(); viewMode = 'month';
