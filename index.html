@@ -94,13 +94,13 @@
         .login-title { font-size: 32px; font-weight: 900; color: var(--text-main); margin-bottom: 12px; }
         .login-subtitle { font-size: 16px; font-weight: bold; color: var(--text-sub); margin-bottom: 40px; }
 
-        /* 🟢 連線燈號 */
-        .conn-indicator {
-            width: 10px; height: 10px; border-radius: 50%;
-            background-color: #ccc; margin-right: 8px;
-            box-shadow: 0 0 5px rgba(0,0,0,0.2);
-            transition: background-color 0.3s;
+        /* 🔵 色弱友善：連線狀態標籤 */
+        #connection-dot {
+            font-size: 12px; font-weight: 800; padding: 6px 12px; border-radius: 16px;
+            display: flex; align-items: center; gap: 6px; margin-right: 4px;
+            background-color: #e0e0e0; color: #555555; border: 2px solid transparent;
         }
+        [data-theme="dark"] #connection-dot { background-color: #333; color: #ccc; }
 
         .top-action-bar { flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 12px 20px; background: var(--card-bg); border-bottom: 1px solid var(--border-color); }
         .left-btns { display: flex; gap: 8px; align-items: center; }
@@ -309,7 +309,7 @@
 
     <div class="top-action-bar">
         <div class="left-btns">
-            <div id="connection-dot" class="conn-indicator"></div>
+            <div id="connection-dot"><span>⏳</span> 連線中</div>
             <button class="theme-capsule-btn" onclick="openSettings()" style="margin-right: 4px;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
                     <line x1="4" y1="6" x2="20" y2="6"></line>
@@ -508,14 +508,20 @@
             setTimeout(() => { toast.style.display = 'none'; }, duration);
         };
 
-        // 🟢 實時監聽 Firebase 連線狀態
+        // 🔵 實時監聽 Firebase 連線狀態 (色弱友善版：符號 + 藍/灰高對比)
         const connRef = ref(db, ".info/connected");
         onValue(connRef, (snap) => {
            const dot = document.getElementById('connection-dot');
            if (snap.val() === true) {
-               dot.style.backgroundColor = '#4CAF50'; // 綠色
+               dot.style.backgroundColor = '#eef7fc'; // 淺藍色背景
+               dot.style.color = '#4ab3e3';           // 深藍色文字
+               dot.style.border = '2px solid #4ab3e3';
+               dot.innerHTML = '<span>✔️</span> 已連線';
            } else {
-               dot.style.backgroundColor = '#F44336'; // 紅色
+               dot.style.backgroundColor = '#f5f5f5'; // 灰色背景
+               dot.style.color = '#666666';           // 深灰色文字
+               dot.style.border = '2px solid #666666';
+               dot.innerHTML = '<span>❌</span> 斷線';
            }
         });
 
@@ -572,13 +578,13 @@
                 const data = snapshot.val();
                 let cloudRecords = [];
                 if (data) {
-                    cloudRecords = Array.isArray(data) ? data : Object.values(data);
-                    cloudRecords = cloudRecords.filter(r => r !== null);
+                    // 🌟 陣列 Bug 修復：將 Object 轉回 Array，濾除 null
+                    cloudRecords = Object.values(data).filter(r => r !== null);
                 }
 
                 // 🌟 純雲端模式：直接覆蓋畫面
                 window.records = cloudRecords.sort((a, b) => b.id - a.id);
-                showToast(`✅ 雲端資料載入成功！(${window.records.length} 筆)`);
+                showToast(`☁️ 成功讀取 ${window.records.length} 筆資料！`);
 
                 if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
                 if (document.getElementById('calendarModal') && document.getElementById('calendarModal').classList.contains('active')) {
@@ -587,44 +593,29 @@
                 }
             }, (error) => {
                 console.error("Firebase Read Error:", error);
-                if (error.code === 'PERMISSION_DENIED') {
-                    let currentEmail = auth.currentUser ? auth.currentUser.email : '未知';
-                    document.getElementById('sidebar-auth-status').innerText = '無權限存取 (白名單阻擋)';
-                    
-                    // 🚨 終極報錯機制：話畀用家知要輸入咩去資料庫
-                    const requiredKey = currentEmail.replace(/\./g, ',');
-                    const errorMsg = `⚠️ Firebase 讀取被拒絕！\n\n系統發現你的 Email 未被加入白名單。\n\n目前登入：\n${currentEmail}\n\n👉 解決方法：\n請去 Firebase -> Realtime Database -> Data\n確保 [ whitelist ] 資料夾內有以下設定：\n\n${requiredKey} : true`;
-                    
-                    alert(errorMsg);
-                    
-                    // 同時顯示在登入畫面上，防止白畫面不知所措
-                    const loginScreen = document.getElementById('login-screen');
-                    loginScreen.style.display = 'flex';
-                    document.getElementById('login-error-msg').innerText = `權限不足！請將 ${requiredKey} 加入 Firebase 白名單。`;
-                    document.getElementById('login-error-msg').style.display = 'block';
-                } else {
-                    showToast("❌ 讀取失敗：" + error.message, 5000);
-                }
+                showToast("❌ 讀取失敗：" + error.message, 5000);
             });
         }
 
         window.saveToFirebase = function(recordsArray) {
-            // 🌟 純雲端模式：嚴禁 Local Storage，直接上傳 Firebase
+            // 🌟 嚴禁 Local Storage，直接上傳 Firebase
             if (auth.currentUser && navigator.onLine !== false && recordsRef) {
-                set(recordsRef, recordsArray)
-                    .then(() => showToast("☁️ 資料已同步至雲端"))
+                
+                // 🌟 終極修復：將 Array 轉成 Object (Dictionary)，徹底解決 Firebase 陣列留白 Bug
+                let recordsObj = {};
+                recordsArray.forEach(record => {
+                    recordsObj[record.id] = record;
+                });
+
+                // 儲存 Object 而不是 Array
+                set(recordsRef, recordsObj)
+                    .then(() => showToast("☁️ 資料已成功寫入雲端！"))
                     .catch(error => {
                         console.error("Firebase Write Error:", error);
-                        if(error.code === 'PERMISSION_DENIED') {
-                            let currentEmail = auth.currentUser ? auth.currentUser.email : '未知';
-                            const requiredKey = currentEmail.replace(/\./g, ',');
-                            alert(`⚠️ 寫入失敗！權限不足。\n\n請確保 Firebase 資料庫有以下設定：\nwhitelist -> ${requiredKey} : true`);
-                        } else {
-                            showToast("❌ 雲端儲存失敗：" + error.message, 5000);
-                        }
+                        showToast("❌ 雲端寫入失敗：" + error.message, 5000);
                     });
             } else {
-                showToast("❌ 無法連線至雲端，儲存失敗", 4000);
+                showToast("❌ 無法連線至雲端，寫入失敗", 4000);
             }
         };
     </script>
