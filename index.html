@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>家庭記帳日記 - 安全同步版</title>
+    <title>家庭記帳日記 - 專屬雲端版</title>
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -12,6 +12,7 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
     
     <style>
+        /* --- 徹底還原完美無留白佈局，並將底色轉為金黃色 --- */
         html { 
             background-color: var(--bg-color); 
             width: 100vw; 
@@ -79,6 +80,7 @@
             pointer-events: none;
         }
 
+        /* --- 強制登入畫面 --- */
         #login-screen {
             position: fixed;
             top: 0; left: 0;
@@ -270,12 +272,13 @@
     
     <div id="toast-container"></div>
 
+    <!-- 移除了本機版按鈕，只保留 Google 登入 -->
     <div id="login-screen">
         <h1 class="login-title">家庭記帳日記</h1>
-        <button id="main-login-btn" class="google-btn" onclick="signInWithGoogle()" style="width: 80%; max-width: 320px; height: 50px; display: none;">
+        <button id="main-login-btn" class="google-btn" onclick="signInWithGoogle()" style="width: 80%; max-width: 320px; height: 50px;">
             <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google"> 授權 Google 帳號登入
         </button>
-        <p id="login-error-msg" style="color: var(--text-sub); font-size: 15px; font-weight: bold; margin-top: 16px; text-align: center;">⏳ 檢查登入狀態中...</p>
+        <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 16px; display: none; text-align: center;"></p>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
@@ -480,8 +483,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-        // 🚨 引入 signInWithRedirect 解決 iPhone 封鎖彈出視窗嘅問題
-        import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        // ✨ 改回使用 signInWithPopup
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -524,32 +527,19 @@
            }
         });
 
-        // 🚨 改為直接跳轉頁面登入
+        // 🌟 改回彈出視窗登入，解決 iOS 頁面跳轉出錯問題
         window.signInWithGoogle = function() {
-            const errorMsg = document.getElementById('login-error-msg');
-            errorMsg.innerText = "⏳ 正在跳轉至 Google 登入...";
-            errorMsg.style.color = "var(--text-sub)";
-            errorMsg.style.display = 'block';
-            document.getElementById('main-login-btn').style.display = 'none';
-            
+            document.getElementById('login-error-msg').style.display = 'none';
             provider.setCustomParameters({ prompt: 'select_account' });
-            signInWithRedirect(auth, provider).catch(err => {
+            
+            signInWithPopup(auth, provider).catch(err => {
                 console.log(err);
-                errorMsg.innerText = "❌ 跳轉登入發生錯誤";
+                const errorMsg = document.getElementById('login-error-msg');
+                errorMsg.innerText = "❌ 登入失敗或被取消";
                 errorMsg.style.color = "#ff5b5b";
-                document.getElementById('main-login-btn').style.display = 'flex';
+                errorMsg.style.display = 'block';
             });
         };
-
-        // 捕捉跳轉返回嘅錯誤
-        getRedirectResult(auth).catch(err => {
-            console.log("Redirect Error:", err);
-            const errorMsg = document.getElementById('login-error-msg');
-            errorMsg.innerText = "❌ 登入被取消或出現錯誤";
-            errorMsg.style.color = "#ff5b5b";
-            errorMsg.style.display = 'block';
-            document.getElementById('main-login-btn').style.display = 'flex';
-        });
 
         window.signOutGoogle = function() {
             if(auth.currentUser) {
@@ -568,22 +558,33 @@
             const loginBtn = document.getElementById('sidebar-google-login-btn');
 
             if (user) {
-                // 🚨 核心安全更新：登入後【絕對唔可以】即刻收起登入畫面！
-                // 必須等待 Firebase 白名單驗證通過，確保安全防線生效。
                 const emailKey = user.email.replace(/\./g, ',');
                 statusText.innerText = `已登入:\n${user.email}`;
                 logoutBtn.style.display = 'flex';
                 loginBtn.style.display = 'none';
-                mainLoginBtn.style.display = 'none';
                 
-                errorMsg.innerText = "🛡️ 正在與伺服器核對白名單權限...";
-                errorMsg.style.color = "var(--text-sub)";
-                errorMsg.style.display = 'block';
+                // 🚀 核心優化：檢查有無本機快取
+                const localData = localStorage.getItem('records_' + emailKey);
                 
+                if (localData) {
+                    // 有快取：0 秒直接跳過登入頁，畫面即時呈現
+                    window.records = JSON.parse(localData);
+                    loginScreen.style.display = 'none';
+                    if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
+                } else {
+                    // 無快取（第一次登入或換新機）：顯示正在載入
+                    mainLoginBtn.style.display = 'none';
+                    errorMsg.innerText = "⏳ 初次登入，正在載入雲端資料...";
+                    errorMsg.style.color = "var(--text-sub)";
+                    errorMsg.style.display = 'block';
+                }
+
+                // 啟動背後雲端查核及同步
                 recordsRef = ref(db, 'users/' + emailKey + '/records');
                 startDatabaseSync(emailKey); 
+
             } else {
-                // 未登入：顯示登入按鈕
+                // 尚未登入
                 loginScreen.style.display = 'flex';
                 mainLoginBtn.style.display = 'flex';
                 errorMsg.style.display = 'none';
@@ -600,9 +601,8 @@
         function startDatabaseSync(emailKey) {
             if (!recordsRef) return;
             
-            // 🚨 Firebase 權限查核
             onValue(recordsRef, (snapshot) => {
-                // 雲端驗證成功放行！此時才安全解鎖登入畫面
+                // 雲端驗證成功！如果是第一次登入，而家先收起登入畫面
                 document.getElementById('login-screen').style.display = 'none';
 
                 const data = snapshot.val();
@@ -611,7 +611,7 @@
                     cloudRecords = Object.values(data).filter(r => r !== null);
                 }
 
-                // 以雲端數據為主，並覆蓋更新本地儲存
+                // 刷新資料並更新手機快取
                 window.records = cloudRecords.sort((a, b) => b.id - a.id);
                 localStorage.setItem('records_' + emailKey, JSON.stringify(window.records));
 
@@ -623,20 +623,22 @@
             }, (error) => {
                 console.error("Firebase Read Error:", error);
                 if (error.code === 'PERMISSION_DENIED') {
-                    // 黑客或被踢出白名單嘅人，立刻粉碎本地紀錄並鎖死
+                    // 🚨 終極安全機制：如果 Firebase 發現冇權限，即刻踢出！
                     localStorage.removeItem('records_' + emailKey);
                     window.records = [];
                     if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
-
+                    
+                    signOut(auth); // 強制登出
+                    
                     let currentEmail = auth.currentUser ? auth.currentUser.email : '未知';
-                    document.getElementById('sidebar-auth-status').innerText = '無權限存取 (白名單阻擋)';
+                    document.getElementById('sidebar-auth-status').innerText = '無權限存取';
                     
                     const loginScreen = document.getElementById('login-screen');
                     loginScreen.style.display = 'flex';
                     document.getElementById('main-login-btn').style.display = 'flex';
                     
                     const msgEl = document.getElementById('login-error-msg');
-                    msgEl.innerText = `⚠️ 權限不足！\n你的 Email:\n【 ${currentEmail} 】\n未被加入白名單，無法進入首頁。`;
+                    msgEl.innerText = `⚠️ 權限不足！\n你的 Email 未被加入白名單，無法進入首頁。`;
                     msgEl.style.color = "#ff5b5b";
                     msgEl.style.display = 'block';
                 } else {
@@ -959,8 +961,7 @@
             const drawSegment = (sAngle, eAngle, faceColor) => {
                 let actualGap = (income > 0 && expense > 0) ? (9 * progress) : 0;
                 const maxAllowedGapOut = Math.min(expenseAngleLength, incomeAngleLength) * outerRadius * 0.45;
-                if (actualGap > maxAllowedGapOut) actualGap = maxAllowedGapOut;
-                const halfGap = actualGap; 
+                if (actualGap > maxAllowedGapOut) actualGap = maxAllowedGapOut; const halfGap = actualGap; 
                 let outA1 = sAngle + Math.asin(halfGap / outerRadius); let outA2 = eAngle - Math.asin(halfGap / outerRadius);
                 let inA1 = sAngle + Math.asin(halfGap / innerRadius); let inA2 = eAngle - Math.asin(halfGap / innerRadius);
 
