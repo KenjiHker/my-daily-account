@@ -95,8 +95,8 @@
         .login-subtitle { font-size: 16px; font-weight: bold; color: var(--text-sub); margin-bottom: 40px; }
 
         #connection-dot {
-            font-size: 13px; font-weight: 800; padding: 4px 12px; border-radius: 12px;
-            display: flex; align-items: center; gap: 6px; margin-bottom: 0;
+            font-size: 14px; font-weight: 800; padding: 12px 16px; border-radius: 12px;
+            display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
             background-color: #e0e0e0; color: #555555; border: 2px solid transparent;
         }
         [data-theme="dark"] #connection-dot { background-color: #2c2c2e; color: #ccc; }
@@ -547,14 +547,17 @@
             const loginBtn = document.getElementById('sidebar-google-login-btn');
 
             if (user) {
-                loginScreen.style.display = 'none';
+                // ⚠️ 關鍵修正：登入後【不立刻隱藏】登入畫面，改為顯示驗證中，等待 Firebase 後台放行
+                document.getElementById('login-error-msg').innerText = "⏳ 正在驗證白名單權限...";
+                document.getElementById('login-error-msg').style.color = "var(--text-sub)";
+                document.getElementById('login-error-msg').style.display = 'block';
+
                 statusText.innerText = `已登入:\n${user.email}`;
                 logoutBtn.style.display = 'flex';
                 loginBtn.style.display = 'none';
                 
-                // 🚀 已分開帳號：每個人嘅資料會獨立儲存喺 users/自己嘅UID/records
                 recordsRef = ref(db, 'users/' + user.uid + '/records');
-                startDatabaseSync(); 
+                startDatabaseSync(); // 去 Firebase 拉資料兼驗證權限
             } else {
                 loginScreen.style.display = 'flex';
                 statusText.innerText = '尚未登入';
@@ -574,6 +577,9 @@
             showToast("⏳ 正在讀取雲端資料...");
             
             onValue(recordsRef, (snapshot) => {
+                // 🌟 讀取成功！證明用戶在白名單內，此時才【真正解鎖】隱藏登入防盜門
+                document.getElementById('login-screen').style.display = 'none';
+
                 const data = snapshot.val();
                 let cloudRecords = [];
                 if (data) {
@@ -590,7 +596,21 @@
                 }
             }, (error) => {
                 console.error("Firebase Read Error:", error);
-                showToast("❌ 讀取失敗：" + error.message, 5000);
+                if (error.code === 'PERMISSION_DENIED') {
+                    let currentEmail = auth.currentUser ? auth.currentUser.email : '未知';
+                    document.getElementById('sidebar-auth-status').innerText = '無權限存取 (白名單阻擋)';
+                    
+                    // ⚠️ 關鍵修正：如果被拒絕，確保登入畫面死鎖在最上層，完全遮住主頁
+                    const loginScreen = document.getElementById('login-screen');
+                    loginScreen.style.display = 'flex';
+                    
+                    const msgEl = document.getElementById('login-error-msg');
+                    msgEl.innerText = `⚠️ 權限不足！\n你的 Email:\n【 ${currentEmail} 】\n未被加入白名單，無法進入首頁。`;
+                    msgEl.style.color = "#ff5b5b";
+                    msgEl.style.display = 'block';
+                } else {
+                    showToast("❌ 讀取失敗：" + error.message, 5000);
+                }
             });
         }
 
@@ -614,10 +634,11 @@
     </script>
 
     <script>
+        // ... (以下維持不變，處理日曆與UI邏輯) ...
         window.addEventListener('load', function() {
             setTimeout(function() { window.scrollTo(0, 1); }, 0);
             if (!window.records) window.records = [];
-            syncHeaderDisplay();
+            // 注意：這裡不強制隱藏登入畫面
         });
 
         const _nowDate = new Date();
@@ -677,29 +698,6 @@
             { id: 10, x: 165, baseY: 170, maxC: 7,  zOrder: 2 }, { id: 11, x: 190, baseY: 175, maxC: 5,  zOrder: 2 },
             { id: 12, x: 150, baseY: 188, maxC: 4,  zOrder: 3 }, { id: 13, x: 175, baseY: 185, maxC: 4,  zOrder: 3 }
         ];
-
-        window.onload = function() {
-            updateThemeButtonIcon();
-            buildEmojiPickerGrid();
-            renderMonthButtonsGrid();
-            coinCanvas = document.getElementById('coinDropCanvas');
-            coinCtx = coinCanvas.getContext('2d');
-            
-            initCoinLoop();
-            initDragHandle();
-            initChartSwipe();
-            initCalendarSwipe();
-            
-            document.getElementById('cal-swipe-track').addEventListener('click', function(e) {
-                const cell = e.target.closest('.cal-day');
-                if (cell && !cell.classList.contains('cal-week-title')) {
-                    selectedDateStr = cell.getAttribute('data-date');
-                    document.getElementById('selected-date-label').innerText = `📍 選定日期：${selectedDateStr}`;
-                    renderGridCalendar();
-                    renderModalDateRecords();
-                }
-            });
-        };
 
         function syncHeaderDisplay() {
             const btn = document.getElementById('view-mode-toggle-btn');
@@ -1159,7 +1157,6 @@
             const _td = new Date();
             const _tdStr = `${_td.getFullYear()}-${String(_td.getMonth() + 1).padStart(2, '0')}-${String(_td.getDate()).padStart(2, '0')}`;
             
-            // 🌟 將預設類型改為 'income' (收入)
             recordState.mode = 'add'; recordState.id = Date.now(); recordState.type = 'income'; recordState.category = categories['income'][0]; recordState.date = new Date(_tdStr); recordState.expression = ''; recordState.amount = 0; recordState.diary = '';
             selectedCustomIconRecord = '🎨';
             document.getElementById('record-modal-title').innerText = '新增帳目'; document.getElementById('record-delete-btn').style.display = 'none'; document.getElementById('record-amount').innerText = '0';
