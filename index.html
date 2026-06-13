@@ -556,7 +556,7 @@
                 logoutBtn.style.display = 'flex';
                 loginBtn.style.display = 'none';
                 
-                recordsRef = ref(db, 'users/' + user.uid + '/records');
+                recordsRef = ref(db, 'users/' + user.email.replace(/\./g, ',') + '/records');
                 startDatabaseSync(); 
             } else {
                 loginScreen.style.display = 'flex';
