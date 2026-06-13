@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>家庭記帳日記 - 專屬雲端版</title>
     
-    <!-- 🔥 強制 Web App 每次打開都清除快取，自動獲取 GitHub 最新版本 🔥 -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -17,7 +16,6 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
     
     <style>
-        /* --- 徹底還原完美無留白佈局，並將底色轉為金黃色 --- */
         html { 
             background-color: var(--bg-color); 
             width: 100vw; 
@@ -27,7 +25,6 @@
         }
         
         :root {
-            /* 全面改為金黃色背景 */
             --bg-color: #FFD700; 
             --primary-color: #4ab3e3; --income-color: #7bc7c3; --expense-color: #f7a3b6;
             --text-main: #333333; --text-sub: #888888; --card-bg: #ffffff; --radius-main: 16px; --radius-sub: 12px;
@@ -37,7 +34,6 @@
         }
 
         [data-theme="dark"] {
-            /* 暗黑模式下的深金黃色背景 */
             --bg-color: #4A3B00; 
             --text-main: #f5f5f7; --text-sub: #a1a1a6; --card-bg: #1c1c1e;
             --border-color: #2c2c2e; --input-bg: #2c2c2e; --nav-btn-bg: #2c2c2e; --nav-btn-text: #e5e5ea;
@@ -45,7 +41,6 @@
             --calc-bg: #25211e; --calc-btn-num: #3a3532; --calc-btn-op: #5c4d4a; --calc-btn-eq: #b39224; --calc-text: #f5f5f7;
         }
 
-        /* 移除點擊高亮，防止誤觸影響體驗 */
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; transition: background-color 0.5s, border-color 0.5s, color 0.5s; }
         
         body { 
@@ -58,7 +53,7 @@
             position: fixed;
             top: 0; left: 0; 
             width: 100vw; 
-            height: 100dvh; /* 確保全高，不留白 */
+            height: 100dvh; 
             overflow: hidden; 
             overscroll-behavior-y: none;
         }
@@ -88,7 +83,6 @@
             pointer-events: none;
         }
 
-        /* --- 強制登入畫面 --- */
         #login-screen {
             position: fixed;
             top: 0; left: 0;
@@ -101,7 +95,8 @@
             justify-content: center;
             padding: 20px;
         }
-        .login-title { font-size: 32px; font-weight: 900; color: var(--text-main); margin-bottom: 40px; }
+        .login-title { font-size: 32px; font-weight: 900; color: var(--text-main); margin-bottom: 12px; }
+        .login-subtitle { font-size: 16px; font-weight: bold; color: var(--text-sub); margin-bottom: 40px; }
 
         #connection-dot {
             font-size: 14px; font-weight: 800; padding: 12px 16px; border-radius: 12px;
@@ -110,10 +105,10 @@
         }
         [data-theme="dark"] #connection-dot { background-color: #2c2c2e; color: #ccc; }
 
-        /* --- 頂部導覽列功能鈕 --- */
-        .top-action-bar { flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 12px 20px; background: var(--card-bg); border-bottom: 1px solid var(--border-color); }
-        .left-btns { display: flex; gap: 8px; align-items: center; width: 44px; /* 設定寬度確保置中 */ }
-        .right-btns { display: flex; gap: 8px; align-items: center; justify-content: flex-end; width: 44px; /* 設定寬度確保置中 */ }
+        /* 🔥 修復頂部選單，與下方圖表面板無縫接合 🔥 */
+        .top-action-bar { flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 0 20px; background: var(--card-bg); border-bottom: none; z-index: 10; position: relative; }
+        .left-btns { display: flex; gap: 8px; align-items: center; width: 44px; }
+        .right-btns { display: flex; gap: 8px; align-items: center; justify-content: flex-end; width: 44px; }
         
         .theme-capsule-btn { background: var(--nav-btn-bg); border: none; width: 36px; height: 36px; border-radius: 50%; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); color: var(--text-main); transition: transform 0.2s; }
         .theme-capsule-btn:active { transform: scale(0.9); }
@@ -121,7 +116,6 @@
         .triangle-down { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--text-main); display: inline-block; }
         .nav-btn { background: var(--nav-btn-bg); border: none; padding: 0 12px; border-radius: 20px; font-size: 13px; font-weight: bold; color: var(--nav-btn-text); display: flex; align-items: center; justify-content: center; min-height: 44px; }
 
-        /* --- 設定側邊欄 --- */
         .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: rgba(0,0,0,0.5); z-index: 9998; opacity: 0; pointer-events: none; transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: opacity; }
         .sidebar-overlay.active { opacity: 1; pointer-events: auto; }
         
@@ -135,8 +129,8 @@
         .settings-label { font-size: 13px; font-weight: bold; color: var(--text-sub); margin-bottom: 4px; }
         .settings-action-btn { background: var(--nav-btn-bg); color: var(--text-main); border: 2px solid var(--border-color); padding: 14px 16px; border-radius: 12px; font-size: 16px; font-weight: bold; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 10px; min-height: 44px;}
 
-        /* --- 固定中間圓餅圖看板 (計數機 3D 按鈕美化風格) --- */
-        .header-dashboard { flex-shrink: 0; background: var(--card-bg); padding: 16px 20px; border-radius: 24px; border: 2px solid var(--text-main); box-shadow: 0 4px 0 var(--text-main); text-align: center; z-index: 10; margin: 12px 16px 16px 16px; touch-action: pan-y; }
+        /* 🔥 美化版圖表面板：寬度100vw，無左右邊距，無縫連接滑動區 🔥 */
+        .header-dashboard { flex-shrink: 0; background: var(--card-bg); padding: 8px 20px 20px 20px; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; border-bottom: 2px solid var(--text-main); box-shadow: 0 6px 0 var(--text-main); text-align: center; z-index: 10; margin: 0; touch-action: pan-y; position: relative; overflow: hidden; width: 100vw; }
         #chart-swipe-track { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; will-change: transform; }
         .chart-container { position: relative; width: 240px; height: 240px; margin: 0 auto; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
         #pieChart { width: 240px; height: 240px; display: block; }
@@ -145,7 +139,6 @@
         .chart-center-text .title { font-size: 11px; color: var(--text-sub); font-weight: bold; margin-bottom: 1px; }
         .chart-center-text .balance { font-size: 14px; font-weight: 800; color: var(--text-main); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-        /* --- 歷史明細容器區 --- */
         .container { flex: 1; padding: 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
         .history-container { width: 100%; } 
         .empty-state-wrapper { display: flex; flex-direction: column; align-items: center; padding-top: 60px; color: var(--text-sub); }
@@ -179,7 +172,6 @@
         .list-action-delete-btn { background: #fff5f5; color: #ff5b5b; border: 1.5px solid #ff5b5b; font-size: 12px; font-weight: bold; padding: 6px 12px; border-radius: 8px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
         [data-theme="dark"] .list-action-delete-btn { background: #2c1919; color: #ff8787; border-color: #ff8787; }
 
-        /* --- 選月份的膠囊按鈕 (計數機按鈕美化風格) --- */
         .month-grid-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 8px 4px; }
         .month-cell-btn { height: 54px; border: 2px solid var(--text-main); background: var(--card-bg); border-radius: 18px; font-size: 16px; font-weight: 900; color: var(--text-main); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 var(--text-main); transition: transform 0.1s, box-shadow 0.1s, background-color 0.3s; }
         .month-cell-btn:active { transform: translateY(4px); box-shadow: 0 0px 0 var(--text-main); }
@@ -204,7 +196,6 @@
         .cal-day.selected-circle { background-color: var(--text-main); color: var(--card-bg) !important; font-weight: bold; }
         .day-dot { position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 5px; height: 5px; background-color: #ff5b5b; border-radius: 50%; }
 
-        /* 🔥 使月份彈出視窗靠上對齊並修改動畫 */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: rgba(0,0,0,0.5); z-index: 2000; display: none; align-items: flex-end; transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: opacity; }
         .modal-overlay.active { display: flex; opacity: 1; }
         .modal-overlay.top-aligned { align-items: flex-start; }
@@ -294,10 +285,11 @@
 
     <div id="login-screen">
         <h1 class="login-title">家庭記帳日記</h1>
+        <p class="login-subtitle">雲端同步，資料不遺失</p>
         <button id="main-login-btn" class="google-btn" onclick="signInWithGoogle()" style="width: 80%; max-width: 320px; height: 50px;">
             <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google"> 授權 Google 帳號登入
         </button>
-        <p id="login-error-msg" style="color: #4ab3e3; font-size: 14px; font-weight: bold; margin-top: 16px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
+        <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 16px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
@@ -385,7 +377,6 @@
 
     <div class="modal-overlay" id="calendarModal" onclick="closeCalendarModal(event)">
         <div class="modal-sheet calendar-sheet" onclick="event.stopPropagation()">
-            <!-- 🔥 箭嘴貼實月份 -->
             <div class="modal-header" style="display: flex; align-items: center; justify-content: space-between;">
                 <div style="width: 44px;"></div>
                 <div style="display: flex; align-items: center; justify-content: center; gap: 4px; flex: 1;">
@@ -409,7 +400,6 @@
         </div>
     </div>
 
-    <!-- 🔥 由上而下彈出的月份視窗 -->
     <div class="modal-overlay top-aligned" id="monthModal" onclick="closeMonthModal(event)">
         <div class="modal-sheet top-sheet" onclick="event.stopPropagation()">
             <div class="modal-header">
@@ -739,11 +729,6 @@
     </script>
 
     <script>
-        window.addEventListener('load', function() {
-            setTimeout(function() { window.scrollTo(0, 1); }, 0);
-            if (!window.records) window.records = [];
-        });
-
         const _nowDate = new Date();
         const _y = _nowDate.getFullYear();
         const _m = _nowDate.getMonth();
@@ -760,6 +745,16 @@
         let showMonthRecords = true;
         let prevChartInc = -1;
         let prevChartExp = -1;
+
+        window.addEventListener('load', function() {
+            setTimeout(function() { window.scrollTo(0, 1); }, 0);
+            if (!window.records) window.records = [];
+            
+            // 🔥 手動初始化一次 UI 顯示
+            document.getElementById('current-display-month-label').innerText = `${currentSelectedYear}年 ${currentSelectedMonth + 1}月`;
+            document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
+            syncHeaderDisplay();
+        });
         
         function openSettings() {
             document.getElementById('settings-sidebar').classList.add('active');
@@ -1114,7 +1109,6 @@
 
         function openDeleteModal(id) { pendingDeleteId = id; document.getElementById('deleteConfirmModal').classList.add('active'); }
         function closeDeleteModal() { pendingDeleteId = null; document.getElementById('deleteConfirmModal').classList.remove('active'); }
-        
         function executeDeleteRecord() {
             if (pendingDeleteId) {
                 records = records.filter(r => r.id !== pendingDeleteId);
@@ -1399,7 +1393,6 @@
 
         function renderRecordCategories() {
             const grid = document.getElementById('record-cat-grid'); grid.innerHTML = '';
-            
             const isCurrentCustom = recordState.category.includes('其他') || !categories[recordState.type].includes(recordState.category);
 
             categories[recordState.type].forEach(cat => {
