@@ -538,9 +538,13 @@
             setTimeout(() => { toast.style.display = 'none'; }, duration);
         };
 
-        // 捕捉 Redirect 回傳，忽略 ITP 報錯避免卡死 UI
-        getRedirectResult(auth).catch(err => {
-            console.log("Redirect Ignored:", err);
+        // 捕捉跳轉登入結果
+        getRedirectResult(auth).then((result) => {
+            if (result && result.user) {
+                console.log("重定向認證成功:", result.user.email);
+            }
+        }).catch((err) => {
+            console.warn("重定向驗證狀態:", err);
         });
 
         const connRef = ref(db, ".info/connected");
@@ -559,7 +563,7 @@
            }
         });
 
-        // 🟢 使用最兼容 iOS PWA 嘅 Redirect 登入
+        // 🟢 PWA 專用：跳轉登入
         window.signInWithGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             errorMsg.innerText = "準備跳轉至 Google 登入...";
@@ -570,11 +574,11 @@
             signInWithRedirect(auth, provider);
         };
 
-        // 🟢 徹底登出，不作強制 LocalStorage 刪除以防破壞 Firebase 原生機制
+        // 🟢 安全登出：清空自己嘅緩存，然後交由 Firebase 處理，最後延遲重新載入
         window.signOutGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             if (errorMsg) {
-                errorMsg.innerText = "⏳ 正在安全登出...";
+                errorMsg.innerText = "⏳ 正在安全登出並清理資料...";
                 errorMsg.style.display = 'block';
                 errorMsg.style.color = "#4ab3e3";
             }
@@ -583,9 +587,11 @@
                 const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
                 try { localStorage.removeItem('records_' + emailKey); } catch(e){}
 
+                // 解除資料庫防雙開標記
                 const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
                 set(sessionRef, null).finally(() => {
                     signOut(auth).then(() => {
+                        // 給予 500ms 緩衝等瀏覽器完全抹除登入狀態
                         setTimeout(() => { location.reload(); }, 500);
                     });
                 });
@@ -615,7 +621,8 @@
                 errorMsg.style.display = 'block';
                 mainLoginBtn.style.display = 'none';
                 
-                // 🛑 核心修復：寫入 Session 後，強制等待 3 秒先開始監聽！避開舊快取瞬間觸發踢人機制！
+                // 🛑 核心修復：強制 3 秒緩衝期！
+                // 等 Firebase 完全建立好新連線、舊快取消退後，先至啟動防雙開監聽
                 const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
                 set(sessionRef, mySessionId).then(() => {
                     if (!sessionListenerAttached) {
@@ -633,7 +640,7 @@
                                     }, 2500);
                                 }
                             }, (err) => console.warn("Session Listener Warn:", err));
-                        }, 3000); // 3秒絕對防護網
+                        }, 3000); // <-- 3 秒絕對防護網
                     }
                 }).catch(e => console.warn("Session Set Warn:", e));
 
@@ -952,7 +959,7 @@
                     const _now = new Date();
                     const isCurrentMonth = (currentSelectedYear === _now.getFullYear() && currentSelectedMonth === _now.getMonth());
 
-                    // Ghost Left (Swipe Right / prev)
+                    // Ghost Left (向右滑 / prev)
                     if (viewMode === 'all') {
                         swipeTarget.appendChild(createGhostChart(_now.getFullYear(), _now.getMonth(), 'month', true));
                     } else {
@@ -961,7 +968,7 @@
                         swipeTarget.appendChild(createGhostChart(pY, pM, 'month', true));
                     }
 
-                    // Ghost Right (Swipe Left / next)
+                    // Ghost Right (向左滑 / next 或 all)
                     if (viewMode !== 'all') {
                         if (isCurrentMonth) {
                             swipeTarget.appendChild(createGhostChart(null, null, 'all', false));
