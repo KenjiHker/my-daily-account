@@ -14,6 +14,21 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-touch-fullscreen" content="yes">
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
+
+    <script>
+        // 🌟 自動版本檢查機制：每次更新代碼，請更改呢個數字
+        const APP_VERSION = "3.0.1"; 
+        (function checkVersion() {
+            const savedVersion = localStorage.getItem('pwa_app_version');
+            if (savedVersion !== APP_VERSION) {
+                localStorage.setItem('pwa_app_version', APP_VERSION);
+                if (!window.location.search.includes('v=')) {
+                    // 發現新版本！強制重載最新代碼
+                    window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
+                }
+            }
+        })();
+    </script>
     
     <style>
         html { 
@@ -96,7 +111,7 @@
             padding: 20px;
         }
         .login-title { font-size: 32px; font-weight: 900; color: var(--text-main); margin-bottom: 12px; }
-        .login-subtitle { font-size: 16px; font-weight: bold; color: var(--text-sub); margin-bottom: 30px; }
+        .login-subtitle { font-size: 16px; font-weight: bold; color: var(--text-sub); margin-bottom: 40px; }
 
         #connection-dot {
             font-size: 14px; font-weight: 800; padding: 12px 16px; border-radius: 12px;
@@ -274,21 +289,6 @@
         #recordModal .calc-btn { height: 100%; min-height: 0; border-radius: 12px; box-shadow: 0 3px 0 var(--text-main); }
         #recordModal .calc-btn:active { transform: translateY(3px); box-shadow: 0 0px 0 var(--text-main); }
     </style>
-    
-    <script>
-        // 🌟 自動版本檢查機制：每次更新代碼，請更改呢個數字 (例如改成 "3.0.1")
-        const APP_VERSION = "3.0.0"; 
-        (function checkVersion() {
-            const savedVersion = localStorage.getItem('pwa_app_version');
-            if (savedVersion !== APP_VERSION) {
-                localStorage.setItem('pwa_app_version', APP_VERSION);
-                if (!window.location.search.includes('v=')) {
-                    // 強制重載最新版本，繞過 iOS 頑固快取
-                    window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
-                }
-            }
-        })();
-    </script>
 </head>
 <body>
     
@@ -298,15 +298,9 @@
         <h1 class="login-title">家庭記帳日記</h1>
         <p class="login-subtitle">雲端同步，資料不遺失</p>
         
-        <div style="display:flex; flex-direction:column; gap:16px; width:80%; max-width:320px;">
-            <button id="main-login-btn" class="google-btn" onclick="signInRedirect()" style="height: 50px;">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google"> Google 登入 (推薦)
-            </button>
-            
-            <button class="google-btn" onclick="signInPopup()" style="height: 50px; background-color: #f0f4f8; border-color: #d0d7de; color: #555;">
-                備用登入 (如果上面無反應)
-            </button>
-        </div>
+        <button id="main-login-btn" class="google-btn" onclick="signInWithGoogle()" style="width: 80%; max-width: 320px; height: 50px;">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google"> 授權 Google 帳號登入
+        </button>
 
         <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 20px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
     </div>
@@ -529,7 +523,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-        import { getAuth, signInWithRedirect, signInWithPopup, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -555,20 +549,6 @@
             setTimeout(() => { toast.style.display = 'none'; }, duration);
         };
 
-        // 捕捉 Redirect 登入結果
-        getRedirectResult(auth).then((result) => {
-            if (result && result.user) {
-                console.log("跳轉登入成功");
-            }
-        }).catch((err) => {
-            const errorMsg = document.getElementById('login-error-msg');
-            if (errorMsg) {
-                errorMsg.innerText = "⚠️ 跳轉登入被系統阻擋，請嘗試下方「備用登入」\n" + err.message;
-                errorMsg.style.color = "#ff5b5b";
-                errorMsg.style.display = 'block';
-            }
-        });
-
         const connRef = ref(db, ".info/connected");
         onValue(connRef, (snap) => {
            const dot = document.getElementById('connection-dot');
@@ -585,19 +565,8 @@
            }
         });
 
-        // 🟢 PWA 首選：跳轉登入
-        window.signInRedirect = function() {
-            const errorMsg = document.getElementById('login-error-msg');
-            errorMsg.innerText = "準備跳轉至 Google 登入...";
-            errorMsg.style.color = "#4ab3e3";
-            errorMsg.style.display = 'block';
-
-            provider.setCustomParameters({ prompt: 'select_account' });
-            signInWithRedirect(auth, provider);
-        };
-
-        // 🟡 備用方案：彈出視窗登入
-        window.signInPopup = function() {
+        // 🟢 原版：單一按鈕 Popup 登入
+        window.signInWithGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             errorMsg.innerText = "準備登入...";
             errorMsg.style.color = "#4ab3e3";
@@ -605,12 +574,13 @@
 
             provider.setCustomParameters({ prompt: 'select_account' });
             signInWithPopup(auth, provider).catch(err => {
+                console.error(err);
                 errorMsg.innerText = "❌ 登入失敗\n" + err.message;
                 errorMsg.style.color = "#ff5b5b";
             });
         };
 
-        // 🟢 安全登出：繞過 iOS 快取鎖死
+        // 🟢 安全登出：加 500ms 延遲確保 iOS 快取清除
         window.signOutGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             if (errorMsg) {
@@ -625,9 +595,8 @@
             }
             
             signOut(auth).then(() => {
-                // 強制重載並加上時間參數洗走快取
-                setTimeout(() => { 
-                    window.location.replace(window.location.pathname + '?v=' + new Date().getTime()); 
+                setTimeout(() => {
+                    location.reload();
                 }, 500);
             });
         };
@@ -639,6 +608,7 @@
             const logoutBtn = document.getElementById('sidebar-google-logout-btn');
 
             if (user) {
+                // 🟢 完美保留：透過 Email 綁定及獲取雲端資料
                 const emailKey = user.email.toLowerCase().replace(/\./g, ',');
                 statusText.innerText = `已登入:\n${user.email}`;
                 logoutBtn.style.display = 'flex';
