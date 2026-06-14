@@ -509,7 +509,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -524,11 +524,8 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         const auth = getAuth(app);
-        
-        // 🔒 強制 Firebase 使用 LocalStorage 持久化，防止 iOS 殺死進程後快取遺失
-        setPersistence(auth, browserLocalPersistence).catch(e => console.warn(e));
-        
         const provider = new GoogleAuthProvider();
+        
         let recordsRef = null; 
         const mySessionId = Date.now().toString() + Math.random().toString();
         let sessionListenerAttached = false; 
@@ -540,6 +537,11 @@
             toast.style.display = 'block';
             setTimeout(() => { toast.style.display = 'none'; }, duration);
         };
+
+        // 捕捉 Redirect 回傳，忽略 ITP 報錯避免卡死 UI
+        getRedirectResult(auth).catch(err => {
+            console.log("Redirect Ignored:", err);
+        });
 
         const connRef = ref(db, ".info/connected");
         onValue(connRef, (snap) => {
@@ -557,28 +559,22 @@
            }
         });
 
-        // 🟢 正確使用 Popup 登入，唔會再觸發 ITP 錯誤
+        // 🟢 使用最兼容 iOS PWA 嘅 Redirect 登入
         window.signInWithGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
-            errorMsg.innerText = "準備登入...";
+            errorMsg.innerText = "準備跳轉至 Google 登入...";
             errorMsg.style.color = "#4ab3e3";
             errorMsg.style.display = 'block';
 
             provider.setCustomParameters({ prompt: 'select_account' });
-            signInWithPopup(auth, provider).then(() => {
-                errorMsg.style.display = 'none';
-            }).catch(err => {
-                console.error(err);
-                errorMsg.innerText = "❌ 登入失敗\n" + err.message;
-                errorMsg.style.color = "#ff5b5b";
-            });
+            signInWithRedirect(auth, provider);
         };
 
-        // 🟢 乾淨登出邏輯：保留 Session 清理及延遲，移除會引發卡死嘅暴力清除代碼
+        // 🟢 徹底登出，不作強制 LocalStorage 刪除以防破壞 Firebase 原生機制
         window.signOutGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             if (errorMsg) {
-                errorMsg.innerText = "⏳ 正在安全登出並清理資料...";
+                errorMsg.innerText = "⏳ 正在安全登出...";
                 errorMsg.style.display = 'block';
                 errorMsg.style.color = "#4ab3e3";
             }
@@ -587,11 +583,9 @@
                 const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
                 try { localStorage.removeItem('records_' + emailKey); } catch(e){}
 
-                // 解除 Session 鎖定，避免下次重新登入被秒踢出
                 const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
                 set(sessionRef, null).finally(() => {
                     signOut(auth).then(() => {
-                        // 給予 500ms 時間讓 iOS 寫入快取，確保完全登出
                         setTimeout(() => { location.reload(); }, 500);
                     });
                 });
@@ -621,22 +615,25 @@
                 errorMsg.style.display = 'block';
                 mainLoginBtn.style.display = 'none';
                 
+                // 🛑 核心修復：寫入 Session 後，強制等待 3 秒先開始監聽！避開舊快取瞬間觸發踢人機制！
                 const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
                 set(sessionRef, mySessionId).then(() => {
                     if (!sessionListenerAttached) {
                         sessionListenerAttached = true;
-                        onValue(sessionRef, (snap) => {
-                            const activeSession = snap.val();
-                            if (activeSession && activeSession !== mySessionId) {
-                                showToast('⚠️ 已在其他裝置/瀏覽器登入，您被迫登出！', 4000);
-                                setTimeout(() => {
-                                    if(auth.currentUser) {
-                                        try { localStorage.removeItem('records_' + emailKey); } catch(e){}
-                                    }
-                                    signOut(auth).then(() => location.reload());
-                                }, 2500);
-                            }
-                        }, (err) => console.warn("Session Listener Warn:", err));
+                        setTimeout(() => {
+                            onValue(sessionRef, (snap) => {
+                                const activeSession = snap.val();
+                                if (activeSession && activeSession !== mySessionId) {
+                                    showToast('⚠️ 已在其他裝置/瀏覽器登入，您被迫登出！', 4000);
+                                    setTimeout(() => {
+                                        if(auth.currentUser) {
+                                            try { localStorage.removeItem('records_' + emailKey); } catch(e){}
+                                        }
+                                        signOut(auth).then(() => location.reload());
+                                    }, 2500);
+                                }
+                            }, (err) => console.warn("Session Listener Warn:", err));
+                        }, 3000); // 3秒絕對防護網
                     }
                 }).catch(e => console.warn("Session Set Warn:", e));
 
@@ -994,7 +991,7 @@
                 }
             });
 
-            // 完美符合你所要求嘅圓餅圖滑動顯示總資產邏輯
+            // 完美符合要求：當月向左滑顯示總金額，向右滑上個月
             function navigateSwipe(direction) {
                 const _now = new Date();
                 const isCurrentMonth = (currentSelectedYear === _now.getFullYear() && currentSelectedMonth === _now.getMonth());
