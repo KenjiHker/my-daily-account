@@ -509,7 +509,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-        import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -541,21 +541,6 @@
             setTimeout(() => { toast.style.display = 'none'; }, duration);
         };
 
-        // 捕捉 PWA 跳轉登入嘅回傳結果
-        getRedirectResult(auth).then((result) => {
-            if (result && result.user) {
-                console.log("重定向認證成功:", result.user.email);
-            }
-        }).catch((err) => {
-            console.error("重定向驗證出錯:", err);
-            const errorMsg = document.getElementById('login-error-msg');
-            if (errorMsg) {
-                errorMsg.innerText = "❌ 認證快取衝突，請重新登入\n" + err.message;
-                errorMsg.style.color = "#ff5b5b";
-                errorMsg.style.display = 'block';
-            }
-        });
-
         const connRef = ref(db, ".info/connected");
         onValue(connRef, (snap) => {
            const dot = document.getElementById('connection-dot');
@@ -572,17 +557,24 @@
            }
         });
 
+        // 🟢 正確使用 Popup 登入，唔會再觸發 ITP 錯誤
         window.signInWithGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
-            errorMsg.innerText = "準備跳轉至 Google 登入頁面...";
+            errorMsg.innerText = "準備登入...";
             errorMsg.style.color = "#4ab3e3";
             errorMsg.style.display = 'block';
 
             provider.setCustomParameters({ prompt: 'select_account' });
-            signInWithRedirect(auth, provider);
+            signInWithPopup(auth, provider).then(() => {
+                errorMsg.style.display = 'none';
+            }).catch(err => {
+                console.error(err);
+                errorMsg.innerText = "❌ 登入失敗\n" + err.message;
+                errorMsg.style.color = "#ff5b5b";
+            });
         };
 
-        // 🔥 完全交由 Firebase 安全登出並給予黃金延遲時間 🔥
+        // 🟢 乾淨登出邏輯：保留 Session 清理及延遲，移除會引發卡死嘅暴力清除代碼
         window.signOutGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             if (errorMsg) {
@@ -599,7 +591,7 @@
                 const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
                 set(sessionRef, null).finally(() => {
                     signOut(auth).then(() => {
-                        // 給予 500ms 時間讓 iOS 寫入快取
+                        // 給予 500ms 時間讓 iOS 寫入快取，確保完全登出
                         setTimeout(() => { location.reload(); }, 500);
                     });
                 });
