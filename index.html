@@ -16,8 +16,8 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：每次更新代碼，請更改呢個數字
-        const APP_VERSION = "3.0.1"; 
+        // 🌟 自動版本檢查機制：每次更新代碼，請更改呢個數字 (例如改成 3.0.4)
+        const APP_VERSION = "3.0.3"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
             if (savedVersion !== APP_VERSION) {
@@ -120,7 +120,8 @@
         }
         [data-theme="dark"] #connection-dot { background-color: #2c2c2e; color: #ccc; }
 
-        .top-section-wrapper { flex-shrink: 0; background-color: var(--bg-color); z-index: 10; position: relative; padding-bottom: 12px; }
+        /* 🔥 排版修復：頂部導覽與看板背景緊貼，消除虛位 🔥 */
+        .top-section-wrapper { flex-shrink: 0; background-color: var(--bg-color); z-index: 10; position: relative; padding-bottom: 0; }
         .top-action-bar { display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 0 20px; }
         .left-btns { display: flex; gap: 8px; align-items: center; width: 44px; }
         .right-btns { display: flex; gap: 8px; align-items: center; justify-content: flex-end; width: 44px; }
@@ -130,6 +131,7 @@
         .center-month-selector { font-size: 18px; font-weight: bold; color: var(--text-main); display: flex; align-items: center; justify-content: center; gap: 6px; background: none; border: none; padding: 8px 12px; border-radius: 8px; flex: 1; text-align: center; }
         .triangle-down { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--text-main); display: inline-block; }
 
+        /* 🔥 看板底部 margin 設為 0，確保陰影直接連接滾動區 🔥 */
         .header-dashboard { background: var(--card-bg); border: 2px solid var(--text-main); border-radius: 24px; box-shadow: 0 6px 0 var(--text-main); padding: 12px 20px 16px; margin: 12px 16px 0 16px; text-align: center; position: relative; overflow: hidden; touch-action: pan-y; }
         #chart-swipe-track { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; will-change: transform; }
         .chart-container { position: relative; width: 240px; height: 240px; margin: 0 auto; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -139,7 +141,8 @@
         .chart-center-text .title { font-size: 11px; color: var(--text-sub); font-weight: bold; margin-bottom: 1px; }
         .chart-center-text .balance { font-size: 14px; font-weight: 800; color: var(--text-main); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-        .container { flex: 1; padding: 0 16px 16px 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
+        /* --- 歷史明細容器區：頂部加回 16px Padding，資料會完美捐入看板下 --- */
+        .container { flex: 1; padding: 16px 16px 16px 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
         .history-container { width: 100%; } 
         .empty-state-wrapper { display: flex; flex-direction: column; align-items: center; padding-top: 60px; color: var(--text-sub); }
         .empty-text-main { font-size: 15px; color: #8e8e93; font-weight: 500; }
@@ -522,7 +525,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -565,7 +568,7 @@
            }
         });
 
-        // 🟢 原版：單一按鈕 Popup 登入
+        // 🟢 原版：單一按鈕 Popup 登入，唔會觸發 iOS 跳轉阻擋
         window.signInWithGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             errorMsg.innerText = "準備登入...";
@@ -580,7 +583,7 @@
             });
         };
 
-        // 🟢 安全登出：加 500ms 延遲確保 iOS 快取清除
+        // 🟢 乾淨登出：簡單直接，加 500ms 延遲確保重新載入前系統反應得切
         window.signOutGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             if (errorMsg) {
@@ -596,7 +599,8 @@
             
             signOut(auth).then(() => {
                 setTimeout(() => {
-                    location.reload();
+                    // 加入時間戳參數，防止 Safari 讀取舊快取
+                    window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
                 }, 500);
             });
         };
@@ -651,11 +655,12 @@
             }
         });
 
+        // 🔥 使用 onValue 取代 get()，徹底防止 Safari PWA 請求超時死機 🔥
         function startDatabaseSync(emailKey) {
             if (!recordsRef) return;
             
             const errorMsg = document.getElementById('login-error-msg');
-            errorMsg.innerText = "📥 正在向伺服器請求資料...";
+            errorMsg.innerText = "📥 正在同步雲端資料...";
 
             const handleData = (snapshot) => {
                 try {
@@ -676,8 +681,7 @@
                         if (typeof window.renderModalDateRecords === 'function') window.renderModalDateRecords();
                     }
                 } catch(err) {
-                    errorMsg.innerText = "❌ 處理資料時出錯：\n" + err.message;
-                    errorMsg.style.color = "#ff5b5b";
+                    console.error(err);
                 }
             };
 
@@ -705,21 +709,22 @@
                 }
             };
 
-            const timeoutId = setTimeout(() => {
-                if (document.getElementById('login-screen').style.display !== 'none') {
-                    errorMsg.innerText = "⚠️ 請求超時，請檢查網絡或重新載入頁面。";
-                    errorMsg.style.color = "#ff5b5b";
+            // 啟動資料庫監聽 (取代容易超時掛死嘅 get())
+            onValue(recordsRef, (snap) => {
+                const loginScreen = document.getElementById('login-screen');
+                if (loginScreen.style.display !== 'none') {
+                    errorMsg.innerText = "✅ 同步成功！";
                 }
-            }, 10000);
+                handleData(snap);
+            }, (err) => handleAuthError(err));
 
-            get(recordsRef).then((snapshot) => {
-                clearTimeout(timeoutId);
-                handleData(snapshot);
-                onValue(recordsRef, (snap) => handleData(snap), (err) => handleAuthError(err));
-            }).catch((error) => {
-                clearTimeout(timeoutId);
-                handleAuthError(error);
-            });
+            // 如果連線好慢，只顯示溫馨提示，唔再粗暴超時中斷
+            setTimeout(() => {
+                if (document.getElementById('login-screen').style.display !== 'none') {
+                    errorMsg.innerText = "⏳ 網絡連線較慢，正在努力載入中...";
+                    errorMsg.style.color = "#ffb3b3";
+                }
+            }, 8000);
         }
 
         window.saveData = function(recordsArray) {
@@ -763,6 +768,8 @@
             setTimeout(function() { window.scrollTo(0, 1); }, 0);
             if (!window.records) window.records = [];
             
+            document.getElementById('current-display-month-label').innerText = `${currentSelectedYear}年 ${currentSelectedMonth + 1}月`;
+            document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
             syncHeaderDisplay();
         });
         
@@ -963,7 +970,6 @@
                 }
             });
 
-            // 當月向左滑顯示總金額，向右滑上個月
             function navigateSwipe(direction) {
                 const _now = new Date();
                 const isCurrentMonth = (currentSelectedYear === _now.getFullYear() && currentSelectedMonth === _now.getMonth());
