@@ -128,6 +128,7 @@
         .settings-label { font-size: 13px; font-weight: bold; color: var(--text-sub); margin-bottom: 4px; }
         .settings-action-btn { background: var(--nav-btn-bg); color: var(--text-main); border: 2px solid var(--border-color); padding: 14px 16px; border-radius: 12px; font-size: 16px; font-weight: bold; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 10px; min-height: 44px;}
 
+        /* 🔥 美化版圖表面板：新增頂部邊框，完美計數機立體風格 🔥 */
         .header-dashboard { flex-shrink: 0; background: var(--card-bg); padding: 8px 20px 20px 20px; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; border-bottom: 2px solid var(--text-main); border-top: 2px solid var(--text-main); box-shadow: 0 6px 0 var(--text-main); text-align: center; z-index: 10; margin: 0; touch-action: pan-y; position: relative; overflow: hidden; width: 100vw; }
         #chart-swipe-track { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; will-change: transform; }
         .chart-container { position: relative; width: 240px; height: 240px; margin: 0 auto; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -508,7 +509,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, goOffline, goOnline } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -527,17 +528,8 @@
         const provider = new GoogleAuthProvider();
         
         let recordsRef = null; 
+        
         const mySessionId = Date.now().toString() + Math.random().toString();
-
-        // 🔥 iOS 背景喚醒強制重連，防斷線卡死
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                try {
-                    goOffline(db);
-                    goOnline(db);
-                } catch(e) {}
-            }
-        });
 
         window.showToast = function(msg, duration = 3000) {
             const toast = document.getElementById('toast-container');
@@ -579,7 +571,10 @@
         };
 
         window.signOutGoogle = function() {
-            // 🔥 登出時唔清空 localStorage，留低快取等下次登入秒入
+            if(auth.currentUser) {
+                const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
+                try { localStorage.removeItem('records_' + emailKey); } catch(e){}
+            }
             signOut(auth).then(() => location.reload());
         };
 
@@ -597,27 +592,25 @@
                 logoutBtn.style.display = 'flex';
                 loginBtn.style.display = 'none';
                 
-                errorMsg.innerText = "✅ Google 登入成功！\n🔄 正在喚醒雲端連線...";
+                errorMsg.innerText = "✅ Google 登入成功！\n🔄 正在準備向雲端請求資料...";
                 errorMsg.style.color = "#4ab3e3";
                 errorMsg.style.display = 'block';
                 mainLoginBtn.style.display = 'none';
-
-                // iOS 登入後強制重啟連線
-                try { goOffline(db); goOnline(db); } catch(e) {}
                 
                 const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
                 set(sessionRef, mySessionId).catch(e => console.warn(e));
-                
-                // 🔥 修復卡死：延遲 2 秒先開始監聽雙重登入，防止讀到舊快取秒踢自己！
-                setTimeout(() => {
-                    onValue(sessionRef, (snap) => {
-                        const activeSession = snap.val();
-                        if (activeSession && activeSession !== mySessionId) {
-                            showToast('⚠️ 已在其他裝置/瀏覽器登入，您被迫登出！', 4000);
-                            setTimeout(() => { signOut(auth).then(() => location.reload()); }, 2500);
-                        }
-                    });
-                }, 2000);
+                onValue(sessionRef, (snap) => {
+                    const activeSession = snap.val();
+                    if (activeSession && activeSession !== mySessionId) {
+                        showToast('⚠️ 已在其他裝置/瀏覽器登入，您被迫登出！', 4000);
+                        setTimeout(() => {
+                            if(auth.currentUser) {
+                                try { localStorage.removeItem('records_' + emailKey); } catch(e){}
+                            }
+                            signOut(auth).then(() => location.reload());
+                        }, 2500);
+                    }
+                });
 
                 try {
                     const localData = localStorage.getItem('records_' + emailKey);
@@ -652,32 +645,15 @@
             }
         });
 
+        // 🔥 使用 HTTP Get + WebSocket 雙重防護，防止 Safari 卡死
         function startDatabaseSync(emailKey) {
             if (!recordsRef) return;
             
             const errorMsg = document.getElementById('login-error-msg');
             errorMsg.innerText = "📥 正在請求雲端資料...";
 
-            let isFirstLoad = true;
-            let timeout = setTimeout(() => {
-                if (isFirstLoad) {
-                    const localData = localStorage.getItem('records_' + emailKey);
-                    if (localData) {
-                        document.getElementById('login-screen').style.display = 'none';
-                        showToast('⚠️ 網路連線緩慢，正在使用本機快取');
-                    } else {
-                        errorMsg.innerText = "⚠️ 網路連線緩慢，請檢查網絡或重新整理";
-                        errorMsg.style.color = "#ff5b5b";
-                    }
-                }
-            }, 6000);
-
-            // 🔥 放棄有 bug 嘅 get()，全面改用 onValue() 處理連線！
-            onValue(recordsRef, (snapshot) => {
-                isFirstLoad = false;
-                clearTimeout(timeout);
+            function handleData(data) {
                 try {
-                    let data = snapshot.val();
                     let cloudRecords = [];
                     if (data) {
                         cloudRecords = Object.values(data).filter(r => r !== null && typeof r === 'object' && r.id);
@@ -699,11 +675,15 @@
                     errorMsg.style.color = "#ff5b5b";
                     document.getElementById('main-login-btn').style.display = 'flex';
                 }
-            }, (error) => {
-                isFirstLoad = false;
-                clearTimeout(timeout);
+            }
+
+            function handleAuthError(error) {
                 console.error("Firebase Read Error:", error);
                 if (error.code === 'PERMISSION_DENIED') {
+                    try { localStorage.removeItem('records_' + emailKey); } catch(e){}
+                    window.records = [];
+                    if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
+                    
                     let currentEmail = auth.currentUser ? auth.currentUser.email : '未知';
                     document.getElementById('sidebar-auth-status').innerText = '無權限存取';
                     
@@ -721,6 +701,14 @@
                     errorMsg.style.color = "#ff5b5b";
                     document.getElementById('main-login-btn').style.display = 'flex';
                 }
+            }
+
+            // 強制 Get 一次防卡死，然後掛載實時監聽
+            get(recordsRef).then((snapshot) => {
+                handleData(snapshot.val());
+                onValue(recordsRef, (snap) => handleData(snap.val()), (err) => handleAuthError(err));
+            }).catch((error) => {
+                handleAuthError(error);
             });
         }
 
