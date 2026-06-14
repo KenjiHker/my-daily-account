@@ -309,9 +309,6 @@
                 <span class="settings-label">雲端帳號登入</span>
                 <div id="sidebar-auth-status" style="font-size: 14px; color: var(--text-main); margin-bottom: 8px; font-weight: 600; word-break: break-all;">檢查狀態中...</div>
                 
-                <button id="sidebar-google-login-btn" class="google-btn" onclick="signInWithGoogle()" style="display: none; background-color: #eef7fc; color: #4ab3e3; border-color: #4ab3e3;">
-                    重新登入
-                </button>
                 <button id="sidebar-google-logout-btn" class="google-btn" onclick="signOutGoogle()" style="display: none; background-color: #fff5f5; color: #ff5b5b; border-color: #ff5b5b;">
                     登出雲端帳號
                 </button>
@@ -509,7 +506,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-        import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -527,8 +524,6 @@
         const provider = new GoogleAuthProvider();
         
         let recordsRef = null; 
-        const mySessionId = Date.now().toString() + Math.random().toString();
-        let sessionListenerAttached = false; 
 
         window.showToast = function(msg, duration = 3000) {
             const toast = document.getElementById('toast-container');
@@ -537,15 +532,6 @@
             toast.style.display = 'block';
             setTimeout(() => { toast.style.display = 'none'; }, duration);
         };
-
-        // 捕捉跳轉登入結果
-        getRedirectResult(auth).then((result) => {
-            if (result && result.user) {
-                console.log("重定向認證成功:", result.user.email);
-            }
-        }).catch((err) => {
-            console.warn("重定向驗證狀態:", err);
-        });
 
         const connRef = ref(db, ".info/connected");
         onValue(connRef, (snap) => {
@@ -563,22 +549,26 @@
            }
         });
 
-        // 🟢 PWA 專用：跳轉登入
+        // 🟢 最穩定嘅原生登入，無多餘跳轉，直接喺 PWA 入面運作
         window.signInWithGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
-            errorMsg.innerText = "準備跳轉至 Google 登入...";
+            errorMsg.innerText = "準備登入...";
             errorMsg.style.color = "#4ab3e3";
             errorMsg.style.display = 'block';
 
             provider.setCustomParameters({ prompt: 'select_account' });
-            signInWithRedirect(auth, provider);
+            signInWithPopup(auth, provider).catch(err => {
+                console.log(err);
+                errorMsg.innerText = "❌ 登入失敗\n" + err.message;
+                errorMsg.style.color = "#ff5b5b";
+            });
         };
 
-        // 🟢 安全登出：清空自己嘅緩存，然後交由 Firebase 處理，最後延遲重新載入
+        // 🟢 最乾淨嘅登出，不再手動刪除 Token 破壞資料庫
         window.signOutGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             if (errorMsg) {
-                errorMsg.innerText = "⏳ 正在安全登出並清理資料...";
+                errorMsg.innerText = "⏳ 正在安全登出...";
                 errorMsg.style.display = 'block';
                 errorMsg.style.color = "#4ab3e3";
             }
@@ -586,20 +576,11 @@
             if(auth.currentUser) {
                 const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
                 try { localStorage.removeItem('records_' + emailKey); } catch(e){}
-
-                // 解除資料庫防雙開標記
-                const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
-                set(sessionRef, null).finally(() => {
-                    signOut(auth).then(() => {
-                        // 給予 500ms 緩衝等瀏覽器完全抹除登入狀態
-                        setTimeout(() => { location.reload(); }, 500);
-                    });
-                });
-            } else {
-                signOut(auth).then(() => {
-                    setTimeout(() => { location.reload(); }, 500);
-                });
             }
+            
+            signOut(auth).then(() => {
+                location.reload();
+            });
         };
 
         onAuthStateChanged(auth, (user) => {
@@ -608,41 +589,18 @@
             const mainLoginBtn = document.getElementById('main-login-btn');
             const statusText = document.getElementById('sidebar-auth-status');
             const logoutBtn = document.getElementById('sidebar-google-logout-btn');
-            const loginBtn = document.getElementById('sidebar-google-login-btn');
 
             if (user) {
                 const emailKey = user.email.toLowerCase().replace(/\./g, ',');
                 statusText.innerText = `已登入:\n${user.email}`;
                 logoutBtn.style.display = 'flex';
-                loginBtn.style.display = 'none';
                 
                 errorMsg.innerText = "✅ Google 登入成功！\n🔄 正在準備向雲端請求資料...";
                 errorMsg.style.color = "#4ab3e3";
                 errorMsg.style.display = 'block';
                 mainLoginBtn.style.display = 'none';
-                
-                // 🛑 核心修復：強制 3 秒緩衝期！
-                // 等 Firebase 完全建立好新連線、舊快取消退後，先至啟動防雙開監聽
-                const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
-                set(sessionRef, mySessionId).then(() => {
-                    if (!sessionListenerAttached) {
-                        sessionListenerAttached = true;
-                        setTimeout(() => {
-                            onValue(sessionRef, (snap) => {
-                                const activeSession = snap.val();
-                                if (activeSession && activeSession !== mySessionId) {
-                                    showToast('⚠️ 已在其他裝置/瀏覽器登入，您被迫登出！', 4000);
-                                    setTimeout(() => {
-                                        if(auth.currentUser) {
-                                            try { localStorage.removeItem('records_' + emailKey); } catch(e){}
-                                        }
-                                        signOut(auth).then(() => location.reload());
-                                    }, 2500);
-                                }
-                            }, (err) => console.warn("Session Listener Warn:", err));
-                        }, 3000); // <-- 3 秒絕對防護網
-                    }
-                }).catch(e => console.warn("Session Set Warn:", e));
+
+                // 移除咗令你無限卡死嘅防雙開機制，從此出入平安！
 
                 try {
                     const localData = localStorage.getItem('records_' + emailKey);
@@ -675,7 +633,6 @@
                 
                 statusText.innerText = '尚未登入';
                 logoutBtn.style.display = 'none';
-                loginBtn.style.display = 'flex';
                 
                 window.records = []; 
                 if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
@@ -959,7 +916,7 @@
                     const _now = new Date();
                     const isCurrentMonth = (currentSelectedYear === _now.getFullYear() && currentSelectedMonth === _now.getMonth());
 
-                    // Ghost Left (向右滑 / prev)
+                    // Ghost Left (Swipe Right / prev)
                     if (viewMode === 'all') {
                         swipeTarget.appendChild(createGhostChart(_now.getFullYear(), _now.getMonth(), 'month', true));
                     } else {
@@ -968,7 +925,7 @@
                         swipeTarget.appendChild(createGhostChart(pY, pM, 'month', true));
                     }
 
-                    // Ghost Right (向左滑 / next 或 all)
+                    // Ghost Right (Swipe Left / next)
                     if (viewMode !== 'all') {
                         if (isCurrentMonth) {
                             swipeTarget.appendChild(createGhostChart(null, null, 'all', false));
