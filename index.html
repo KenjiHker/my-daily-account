@@ -105,7 +105,6 @@
         }
         [data-theme="dark"] #connection-dot { background-color: #2c2c2e; color: #ccc; }
 
-        /* 🔥 合併頂部導覽列與圓餅圖面板，實現無縫遮擋 🔥 */
         .top-section-wrapper { flex-shrink: 0; background-color: var(--bg-color); z-index: 10; position: relative; padding-bottom: 12px; }
         .top-action-bar { display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 0 20px; }
         .left-btns { display: flex; gap: 8px; align-items: center; width: 44px; }
@@ -116,7 +115,6 @@
         .center-month-selector { font-size: 18px; font-weight: bold; color: var(--text-main); display: flex; align-items: center; justify-content: center; gap: 6px; background: none; border: none; padding: 8px 12px; border-radius: 8px; flex: 1; text-align: center; }
         .triangle-down { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--text-main); display: inline-block; }
 
-        /* 🔥 計數機風格美化圓餅圖看板 🔥 */
         .header-dashboard { background: var(--card-bg); border: 2px solid var(--text-main); border-radius: 24px; box-shadow: 0 6px 0 var(--text-main); padding: 12px 20px 16px; margin: 12px 16px 0 16px; text-align: center; position: relative; overflow: hidden; touch-action: pan-y; }
         #chart-swipe-track { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; will-change: transform; }
         .chart-container { position: relative; width: 240px; height: 240px; margin: 0 auto; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -126,7 +124,6 @@
         .chart-center-text .title { font-size: 11px; color: var(--text-sub); font-weight: bold; margin-bottom: 1px; }
         .chart-center-text .balance { font-size: 14px; font-weight: 800; color: var(--text-main); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-        /* --- 歷史明細容器區 --- */
         .container { flex: 1; padding: 0 16px 16px 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
         .history-container { width: 100%; } 
         .empty-state-wrapper { display: flex; flex-direction: column; align-items: center; padding-top: 60px; color: var(--text-sub); }
@@ -540,7 +537,7 @@
             setTimeout(() => { toast.style.display = 'none'; }, duration);
         };
 
-        // 🔒 新增：主動監聽跳轉回傳結果，防止快取衝突及重複驗證卡死
+        // 🔒 新增：主動監聽跳轉回傳結果
         getRedirectResult(auth).then((result) => {
             if (result && result.user) {
                 console.log("重定向認證成功:", result.user.email);
@@ -571,7 +568,7 @@
            }
         });
 
-        // 🚀 修改：將 signInWithPopup 改為 signInWithRedirect，完美避開 iOS 主畫面 App 對彈出視窗嘅封鎖
+        // 🚀 修改：將 signInWithPopup 改為 signInWithRedirect
         window.signInWithGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             errorMsg.innerText = "準備跳轉至 Google 登入頁面...";
@@ -877,8 +874,8 @@
             if (income === 0 && expense === 0) {
                 ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI, true);
                 ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor;
-                ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); stroke();
-                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); stroke(); ctx.restore(); return;
+                ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.stroke();
+                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); ctx.stroke(); ctx.restore(); return;
             }
 
             const totalSum = income + expense; const expenseShare = expense / totalSum; const incomeShare = income / totalSum;
@@ -901,7 +898,7 @@
 
                 ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, outA1, outA2); ctx.arc(centerX, centerY, innerRadius, inA2, inA1, true); ctx.closePath();
                 ctx.save(); ctx.shadowColor = 'rgba(0, 0, 0, 0.08)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 6; ctx.fillStyle = faceColor; ctx.fill(); ctx.restore();
-                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; stroke(); ctx.restore();
+                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
             };
 
             if (expense > 0) drawSegment(expStart, expEnd, '#f7a3b6');
@@ -1055,8 +1052,8 @@
             const strokeStyleColor = getComputedStyle(document.documentElement).getPropertyValue('--black-stroke').trim() || '#222222';
             if (income === 0 && expense === 0) {
                 ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI, true);
-                ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); stroke();
-                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); stroke(); ctx.restore(); return;
+                ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.stroke();
+                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); ctx.stroke(); ctx.restore(); return;
             }
 
             const totalSum = income + expense; const expenseShare = expense / totalSum; const incomeShare = income / totalSum;
@@ -1074,7 +1071,7 @@
                 if (outA2 < outA1) { let m = (sAngle+eAngle)/2; outA1 = m; outA2 = m; } if (inA2 < inA1) { let m = (sAngle+eAngle)/2; inA1 = m; inA2 = m; }
                 ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, outA1, outA2); ctx.arc(centerX, centerY, innerRadius, inA2, inA1, true); ctx.closePath();
                 ctx.save(); ctx.shadowColor = 'rgba(0, 0, 0, 0.08)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 6; ctx.fillStyle = faceColor; ctx.fill(); ctx.restore();
-                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; stroke(); ctx.restore();
+                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
             };
             if (expense > 0) drawSegment(expStart, expEnd, '#f7a3b6');
             if (income > 0) drawSegment(incStart, incEnd, '#4ab3e3'); 
