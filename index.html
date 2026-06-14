@@ -16,8 +16,8 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：版本 0.0.4
-        const APP_VERSION = "0.0.4"; 
+        // 🌟 自動版本檢查機制：版本 1.0.0 (正式版)
+        const APP_VERSION = "1.0.0"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
             if (savedVersion !== APP_VERSION) {
@@ -300,11 +300,15 @@
         <h1 class="login-title">家庭記帳日記</h1>
         <p class="login-subtitle">雲端同步，資料不遺失</p>
         
+        <!-- 單一 Google 登入按鈕 -->
         <button id="main-login-btn" class="google-btn" onclick="signInWithGoogle()" style="width: 80%; max-width: 320px; height: 50px;">
             <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google"> 授權 Google 帳號登入
         </button>
 
         <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 20px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
+        
+        <!-- 緊急手動洗機按鈕（備用） -->
+        <span onclick="wipeCacheAndReload()" style="font-size: 13px; color: #888; text-decoration: underline; cursor: pointer; margin-top: 30px;">無法登入？點擊清除瀏覽器快取</span>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
@@ -328,6 +332,9 @@
                 <span class="settings-label">雲端帳號登入</span>
                 <div id="sidebar-auth-status" style="font-size: 14px; color: var(--text-main); margin-bottom: 8px; font-weight: 600; word-break: break-all;">檢查狀態中...</div>
                 
+                <button id="sidebar-google-login-btn" class="google-btn" onclick="signInWithGoogle()" style="display: none; background-color: #eef7fc; color: #4ab3e3; border-color: #4ab3e3;">
+                    重新登入
+                </button>
                 <button id="sidebar-google-logout-btn" class="google-btn" onclick="signOutGoogle()" style="display: none; background-color: #fff5f5; color: #ff5b5b; border-color: #ff5b5b;">
                     登出雲端帳號
                 </button>
@@ -522,11 +529,12 @@
         </div>
     </div>
 
+    <!-- 🔥 核心 Firebase 代碼：最穩定原生配置 + 自動雙重洗機機制 (已移除登出時洗機) 🔥 -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-        // 🔒 Firebase 核心：強制使用 LocalStorage 確保 PWA 不會因 IndexedDB 損壞而卡死
-        import { getAuth, initializeAuth, browserLocalPersistence, browserPopupRedirectResolver, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        // 🔒 回歸最原生、最穩定嘅 getAuth，唔再用會報錯嘅 custom initializeAuth
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -541,11 +549,8 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         
-        // 🔒 強制停用 IndexedDB，只用 LocalStorage 存儲認證狀態，加入 Resolver 防止 argument error
-        const auth = initializeAuth(app, {
-            persistence: browserLocalPersistence,
-            popupRedirectResolver: browserPopupRedirectResolver
-        });
+        // 🔒 回歸最穩定、最標準嘅 getAuth()，無任何花巧設定，保證唔會報錯
+        const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
         
         let recordsRef = null; 
@@ -574,24 +579,28 @@
            }
         });
 
-        // 🟢 背景靜默大掃除：保留主題同版本號，其他快取全清，防 iOS 卡死
-        window.silentWipe = function() {
+        // 🟢 全自動洗機功能：徹底清除所有快取（等同手動清除 Safari 紀錄）
+        window.wipeCacheAndReload = function() {
             try {
+                // 保留主題同版本號，其他全清
                 const theme = localStorage.getItem('apple-app-theme');
                 const ver = localStorage.getItem('pwa_app_version');
                 localStorage.clear();
                 sessionStorage.clear();
                 if(theme) localStorage.setItem('apple-app-theme', theme);
                 if(ver) localStorage.setItem('pwa_app_version', ver);
+                // 嘗試清空 iOS 最易壞嘅 IndexedDB
                 if (window.indexedDB && window.indexedDB.databases) {
                     window.indexedDB.databases().then(dbs => {
                         dbs.forEach(db => { window.indexedDB.deleteDatabase(db.name); });
                     });
                 }
             } catch(e) {}
+            // 加時間戳強制重載
+            window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
         };
 
-        // 🟢 單一按鈕登入：無延遲，一撳即彈，絕不被 Safari Cancel
+        // 🟢 登入按鈕：一撳即彈，絕不被 Cancel 阻擋
         window.signInWithGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             errorMsg.innerText = "正在登入...";
@@ -600,12 +609,13 @@
 
             provider.setCustomParameters({ prompt: 'select_account' });
             
+            // 直接呼叫，絕無 setTimeout，確保 Safari 唔會以為係惡意彈窗
             signInWithPopup(auth, provider).catch(err => {
                 console.error(err);
                 if (err.code === 'auth/popup-blocked') {
                     errorMsg.innerText = "❌ 登入視窗被阻擋。\n請去 iPhone 設定 > Safari > 關閉「阻擋彈出式視窗」後重試。";
                 } else if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
-                    errorMsg.style.display = 'none'; 
+                    errorMsg.style.display = 'none'; // 使用者自己關閉，或者被取消，唔顯示血紅色錯誤
                 } else {
                     errorMsg.innerText = "❌ 登入失敗\n" + err.message;
                 }
@@ -613,20 +623,18 @@
             });
         };
 
-        // 🟢 登出即「終極洗機」：登出後自動洗走所有快取，保證下次入返絕對順暢
+        // 🟢 登出：不再強制洗機，交由系統啟動時判斷
         window.signOutGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             if (errorMsg) {
-                errorMsg.innerText = "⏳ 正在清除資料並安全登出...";
+                errorMsg.innerText = "⏳ 正在安全登出...";
                 errorMsg.style.display = 'block';
                 errorMsg.style.color = "#4ab3e3";
             }
             
             signOut(auth).then(() => {
-                window.silentWipe();
                 window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
             }).catch(() => {
-                window.silentWipe();
                 window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
             });
         };
@@ -672,6 +680,21 @@
 
             } else {
                 // 🛑 核心修復：一打開網頁發現未登入，立刻自動洗機，保證乾淨唔卡死！
+                window.silentWipe = function() {
+                    try {
+                        const theme = localStorage.getItem('apple-app-theme');
+                        const ver = localStorage.getItem('pwa_app_version');
+                        localStorage.clear();
+                        sessionStorage.clear();
+                        if(theme) localStorage.setItem('apple-app-theme', theme);
+                        if(ver) localStorage.setItem('pwa_app_version', ver);
+                        if (window.indexedDB && window.indexedDB.databases) {
+                            window.indexedDB.databases().then(dbs => {
+                                dbs.forEach(db => { window.indexedDB.deleteDatabase(db.name); });
+                            });
+                        }
+                    } catch(e) {}
+                };
                 window.silentWipe();
 
                 loginScreen.style.display = 'flex';
@@ -745,7 +768,7 @@
 
             setTimeout(() => {
                 if (isFirstLoad && document.getElementById('login-screen').style.display !== 'none') {
-                    errorMsg.innerText = "⏳ 網絡連線較慢，正在努力載入中...";
+                    errorMsg.innerText = "⏳ 網絡連線較慢，正在努力同步中...";
                     errorMsg.style.color = "#ffb3b3";
                 }
             }, 8000);
