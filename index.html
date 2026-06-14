@@ -96,7 +96,7 @@
             padding: 20px;
         }
         .login-title { font-size: 32px; font-weight: 900; color: var(--text-main); margin-bottom: 12px; }
-        .login-subtitle { font-size: 16px; font-weight: bold; color: var(--text-sub); margin-bottom: 40px; }
+        .login-subtitle { font-size: 16px; font-weight: bold; color: var(--text-sub); margin-bottom: 30px; }
 
         #connection-dot {
             font-size: 14px; font-weight: 800; padding: 12px 16px; border-radius: 12px;
@@ -274,6 +274,21 @@
         #recordModal .calc-btn { height: 100%; min-height: 0; border-radius: 12px; box-shadow: 0 3px 0 var(--text-main); }
         #recordModal .calc-btn:active { transform: translateY(3px); box-shadow: 0 0px 0 var(--text-main); }
     </style>
+    
+    <script>
+        // 🌟 自動版本檢查機制：每次更新代碼，請更改呢個數字 (例如改成 "3.0.1")
+        const APP_VERSION = "3.0.0"; 
+        (function checkVersion() {
+            const savedVersion = localStorage.getItem('pwa_app_version');
+            if (savedVersion !== APP_VERSION) {
+                localStorage.setItem('pwa_app_version', APP_VERSION);
+                if (!window.location.search.includes('v=')) {
+                    // 強制重載最新版本，繞過 iOS 頑固快取
+                    window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
+                }
+            }
+        })();
+    </script>
 </head>
 <body>
     
@@ -282,10 +297,18 @@
     <div id="login-screen">
         <h1 class="login-title">家庭記帳日記</h1>
         <p class="login-subtitle">雲端同步，資料不遺失</p>
-        <button id="main-login-btn" class="google-btn" onclick="signInWithGoogle()" style="width: 80%; max-width: 320px; height: 50px;">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google"> 授權 Google 帳號登入
-        </button>
-        <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 16px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
+        
+        <div style="display:flex; flex-direction:column; gap:16px; width:80%; max-width:320px;">
+            <button id="main-login-btn" class="google-btn" onclick="signInRedirect()" style="height: 50px;">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google"> Google 登入 (推薦)
+            </button>
+            
+            <button class="google-btn" onclick="signInPopup()" style="height: 50px; background-color: #f0f4f8; border-color: #d0d7de; color: #555;">
+                備用登入 (如果上面無反應)
+            </button>
+        </div>
+
+        <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 20px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
@@ -506,7 +529,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getAuth, signInWithRedirect, signInWithPopup, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -522,7 +545,6 @@
         const db = getDatabase(app);
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
-        
         let recordsRef = null; 
 
         window.showToast = function(msg, duration = 3000) {
@@ -532,6 +554,20 @@
             toast.style.display = 'block';
             setTimeout(() => { toast.style.display = 'none'; }, duration);
         };
+
+        // 捕捉 Redirect 登入結果
+        getRedirectResult(auth).then((result) => {
+            if (result && result.user) {
+                console.log("跳轉登入成功");
+            }
+        }).catch((err) => {
+            const errorMsg = document.getElementById('login-error-msg');
+            if (errorMsg) {
+                errorMsg.innerText = "⚠️ 跳轉登入被系統阻擋，請嘗試下方「備用登入」\n" + err.message;
+                errorMsg.style.color = "#ff5b5b";
+                errorMsg.style.display = 'block';
+            }
+        });
 
         const connRef = ref(db, ".info/connected");
         onValue(connRef, (snap) => {
@@ -549,8 +585,19 @@
            }
         });
 
-        // 🟢 最穩定嘅原生登入，無多餘跳轉，直接喺 PWA 入面運作
-        window.signInWithGoogle = function() {
+        // 🟢 PWA 首選：跳轉登入
+        window.signInRedirect = function() {
+            const errorMsg = document.getElementById('login-error-msg');
+            errorMsg.innerText = "準備跳轉至 Google 登入...";
+            errorMsg.style.color = "#4ab3e3";
+            errorMsg.style.display = 'block';
+
+            provider.setCustomParameters({ prompt: 'select_account' });
+            signInWithRedirect(auth, provider);
+        };
+
+        // 🟡 備用方案：彈出視窗登入
+        window.signInPopup = function() {
             const errorMsg = document.getElementById('login-error-msg');
             errorMsg.innerText = "準備登入...";
             errorMsg.style.color = "#4ab3e3";
@@ -558,13 +605,12 @@
 
             provider.setCustomParameters({ prompt: 'select_account' });
             signInWithPopup(auth, provider).catch(err => {
-                console.log(err);
                 errorMsg.innerText = "❌ 登入失敗\n" + err.message;
                 errorMsg.style.color = "#ff5b5b";
             });
         };
 
-        // 🟢 最乾淨嘅登出，不再手動刪除 Token 破壞資料庫
+        // 🟢 安全登出：繞過 iOS 快取鎖死
         window.signOutGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             if (errorMsg) {
@@ -579,14 +625,16 @@
             }
             
             signOut(auth).then(() => {
-                location.reload();
+                // 強制重載並加上時間參數洗走快取
+                setTimeout(() => { 
+                    window.location.replace(window.location.pathname + '?v=' + new Date().getTime()); 
+                }, 500);
             });
         };
 
         onAuthStateChanged(auth, (user) => {
             const loginScreen = document.getElementById('login-screen');
             const errorMsg = document.getElementById('login-error-msg');
-            const mainLoginBtn = document.getElementById('main-login-btn');
             const statusText = document.getElementById('sidebar-auth-status');
             const logoutBtn = document.getElementById('sidebar-google-logout-btn');
 
@@ -598,9 +646,6 @@
                 errorMsg.innerText = "✅ Google 登入成功！\n🔄 正在準備向雲端請求資料...";
                 errorMsg.style.color = "#4ab3e3";
                 errorMsg.style.display = 'block';
-                mainLoginBtn.style.display = 'none';
-
-                // 移除咗令你無限卡死嘅防雙開機制，從此出入平安！
 
                 try {
                     const localData = localStorage.getItem('records_' + emailKey);
@@ -628,12 +673,9 @@
 
             } else {
                 loginScreen.style.display = 'flex';
-                mainLoginBtn.style.display = 'flex';
                 errorMsg.style.display = 'none';
-                
                 statusText.innerText = '尚未登入';
                 logoutBtn.style.display = 'none';
-                
                 window.records = []; 
                 if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
             }
@@ -666,7 +708,6 @@
                 } catch(err) {
                     errorMsg.innerText = "❌ 處理資料時出錯：\n" + err.message;
                     errorMsg.style.color = "#ff5b5b";
-                    document.getElementById('main-login-btn').style.display = 'flex';
                 }
             };
 
@@ -682,7 +723,6 @@
                     
                     const loginScreen = document.getElementById('login-screen');
                     loginScreen.style.display = 'flex';
-                    document.getElementById('main-login-btn').style.display = 'flex';
                     
                     errorMsg.innerText = `⚠️ 權限不足！\n你的 Email:\n【${currentEmail}】\n未被加入白名單，無法進入首頁。`;
                     errorMsg.style.color = "#ff5b5b";
@@ -692,7 +732,6 @@
                 } else {
                     errorMsg.innerText = "❌ 讀取失敗：" + error.message;
                     errorMsg.style.color = "#ff5b5b";
-                    document.getElementById('main-login-btn').style.display = 'flex';
                 }
             };
 
@@ -700,7 +739,6 @@
                 if (document.getElementById('login-screen').style.display !== 'none') {
                     errorMsg.innerText = "⚠️ 請求超時，請檢查網絡或重新載入頁面。";
                     errorMsg.style.color = "#ff5b5b";
-                    document.getElementById('main-login-btn').style.display = 'flex';
                 }
             }, 10000);
 
@@ -955,7 +993,7 @@
                 }
             });
 
-            // 完美符合要求：當月向左滑顯示總金額，向右滑上個月
+            // 當月向左滑顯示總金額，向右滑上個月
             function navigateSwipe(direction) {
                 const _now = new Date();
                 const isCurrentMonth = (currentSelectedYear === _now.getFullYear() && currentSelectedMonth === _now.getMonth());
