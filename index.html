@@ -130,7 +130,7 @@
 
         .header-dashboard { flex-shrink: 0; background: var(--card-bg); padding: 8px 20px 20px 20px; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; border-bottom: 2px solid var(--text-main); border-top: 2px solid var(--text-main); box-shadow: 0 6px 0 var(--text-main); text-align: center; z-index: 10; margin: 0; touch-action: pan-y; position: relative; overflow: hidden; width: 100vw; }
         #chart-swipe-track { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; will-change: transform; }
-        .chart-container { position: relative; width: 240px; height: 240px; margin: 0 auto; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: overflow: hidden; }
+        .chart-container { position: relative; width: 240px; height: 240px; margin: 0 auto; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
         #pieChart { width: 240px; height: 240px; display: block; }
         .chart-center-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; justify-content: center; align-items: center; width: 130px; height: 130px; background: var(--card-bg); border-radius: 50%; z-index: 10; overflow: hidden; }
         .coin-canvas-container { width: 100px; height: 65px; position: relative; margin-top: 8px; margin-bottom: 2px; display: flex; align-items: flex-end; justify-content: center; overflow: hidden; }
@@ -508,7 +508,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, get, goOffline, goOnline } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, goOffline, goOnline } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -529,7 +529,7 @@
         let recordsRef = null; 
         const mySessionId = Date.now().toString() + Math.random().toString();
 
-        // 🔥 新增：監聽 iOS Web App 從背景喚醒，強制重啟 WebSocket 連線
+        // 🔥 iOS 背景喚醒強制重連，防斷線卡死
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 try {
@@ -579,10 +579,7 @@
         };
 
         window.signOutGoogle = function() {
-            if(auth.currentUser) {
-                const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
-                try { localStorage.removeItem('records_' + emailKey); } catch(e){}
-            }
+            // 🔥 登出時唔清空 localStorage，留低快取等下次登入秒入
             signOut(auth).then(() => location.reload());
         };
 
@@ -605,20 +602,22 @@
                 errorMsg.style.display = 'block';
                 mainLoginBtn.style.display = 'none';
 
+                // iOS 登入後強制重啟連線
+                try { goOffline(db); goOnline(db); } catch(e) {}
+                
                 const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
                 set(sessionRef, mySessionId).catch(e => console.warn(e));
-                onValue(sessionRef, (snap) => {
-                    const activeSession = snap.val();
-                    if (activeSession && activeSession !== mySessionId) {
-                        showToast('⚠️ 已在其他裝置/瀏覽器登入，您被迫登出！', 4000);
-                        setTimeout(() => {
-                            if(auth.currentUser) {
-                                try { localStorage.removeItem('records_' + emailKey); } catch(e){}
-                            }
-                            signOut(auth).then(() => location.reload());
-                        }, 2500);
-                    }
-                });
+                
+                // 🔥 修復卡死：延遲 2 秒先開始監聽雙重登入，防止讀到舊快取秒踢自己！
+                setTimeout(() => {
+                    onValue(sessionRef, (snap) => {
+                        const activeSession = snap.val();
+                        if (activeSession && activeSession !== mySessionId) {
+                            showToast('⚠️ 已在其他裝置/瀏覽器登入，您被迫登出！', 4000);
+                            setTimeout(() => { signOut(auth).then(() => location.reload()); }, 2500);
+                        }
+                    });
+                }, 2000);
 
                 try {
                     const localData = localStorage.getItem('records_' + emailKey);
@@ -659,19 +658,26 @@
             const errorMsg = document.getElementById('login-error-msg');
             errorMsg.innerText = "📥 正在請求雲端資料...";
 
+            let isFirstLoad = true;
             let timeout = setTimeout(() => {
-                const localData = localStorage.getItem('records_' + emailKey);
-                if (localData) {
-                    document.getElementById('login-screen').style.display = 'none';
-                    showToast('⚠️ 網路連線緩慢，正在使用本機快取');
-                } else {
-                    errorMsg.innerText = "⚠️ 網路連線緩慢，請檢查網絡或重新整理";
-                    errorMsg.style.color = "#ff5b5b";
+                if (isFirstLoad) {
+                    const localData = localStorage.getItem('records_' + emailKey);
+                    if (localData) {
+                        document.getElementById('login-screen').style.display = 'none';
+                        showToast('⚠️ 網路連線緩慢，正在使用本機快取');
+                    } else {
+                        errorMsg.innerText = "⚠️ 網路連線緩慢，請檢查網絡或重新整理";
+                        errorMsg.style.color = "#ff5b5b";
+                    }
                 }
-            }, 8000);
+            }, 6000);
 
-            function handleData(data) {
+            // 🔥 放棄有 bug 嘅 get()，全面改用 onValue() 處理連線！
+            onValue(recordsRef, (snapshot) => {
+                isFirstLoad = false;
+                clearTimeout(timeout);
                 try {
+                    let data = snapshot.val();
                     let cloudRecords = [];
                     if (data) {
                         cloudRecords = Object.values(data).filter(r => r !== null && typeof r === 'object' && r.id);
@@ -693,15 +699,11 @@
                     errorMsg.style.color = "#ff5b5b";
                     document.getElementById('main-login-btn').style.display = 'flex';
                 }
-            }
-
-            function handleAuthError(error) {
+            }, (error) => {
+                isFirstLoad = false;
+                clearTimeout(timeout);
                 console.error("Firebase Read Error:", error);
                 if (error.code === 'PERMISSION_DENIED') {
-                    try { localStorage.removeItem('records_' + emailKey); } catch(e){}
-                    window.records = [];
-                    if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
-                    
                     let currentEmail = auth.currentUser ? auth.currentUser.email : '未知';
                     document.getElementById('sidebar-auth-status').innerText = '無權限存取';
                     
@@ -719,15 +721,6 @@
                     errorMsg.style.color = "#ff5b5b";
                     document.getElementById('main-login-btn').style.display = 'flex';
                 }
-            }
-
-            get(recordsRef).then((snapshot) => {
-                clearTimeout(timeout);
-                handleData(snapshot.val());
-                onValue(recordsRef, (snap) => handleData(snap.val()), (err) => handleAuthError(err));
-            }).catch((error) => {
-                clearTimeout(timeout);
-                handleAuthError(error);
             });
         }
 
