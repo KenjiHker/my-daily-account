@@ -127,7 +127,6 @@
         .chart-center-text .balance { font-size: 14px; font-weight: 800; color: var(--text-main); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         /* --- 歷史明細容器區 --- */
-        /* 取消頂部 padding，讓資料滑動時完美消失在黃色底板下 */
         .container { flex: 1; padding: 0 16px 16px 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
         .history-container { width: 100%; } 
         .empty-state-wrapper { display: flex; flex-direction: column; align-items: center; padding-top: 60px; color: var(--text-sub); }
@@ -513,7 +512,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -541,6 +540,21 @@
             setTimeout(() => { toast.style.display = 'none'; }, duration);
         };
 
+        // 🔒 新增：主動監聽跳轉回傳結果，防止快取衝突及重複驗證卡死
+        getRedirectResult(auth).then((result) => {
+            if (result && result.user) {
+                console.log("重定向認證成功:", result.user.email);
+            }
+        }).catch((err) => {
+            console.error("重定向驗證出錯:", err);
+            const errorMsg = document.getElementById('login-error-msg');
+            if (errorMsg) {
+                errorMsg.innerText = "❌ 認證快取衝突，請重新登入：\n" + err.message;
+                errorMsg.style.color = "#ff5b5b";
+                errorMsg.style.display = 'block';
+            }
+        });
+
         const connRef = ref(db, ".info/connected");
         onValue(connRef, (snap) => {
            const dot = document.getElementById('connection-dot');
@@ -557,17 +571,18 @@
            }
         });
 
+        // 🚀 修改：將 signInWithPopup 改為 signInWithRedirect，完美避開 iOS 主畫面 App 對彈出視窗嘅封鎖
         window.signInWithGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
-            errorMsg.innerText = "準備彈出 Google 登入視窗...";
+            errorMsg.innerText = "準備跳轉至 Google 登入頁面...";
             errorMsg.style.color = "#4ab3e3";
             errorMsg.style.display = 'block';
 
             provider.setCustomParameters({ prompt: 'select_account' });
             
-            signInWithPopup(auth, provider).catch(err => {
+            signInWithRedirect(auth, provider).catch(err => {
                 console.log(err);
-                errorMsg.innerText = "❌ 登入失敗或被取消\n" + err.message;
+                errorMsg.innerText = "❌ 跳轉失敗\n" + err.message;
                 errorMsg.style.color = "#ff5b5b";
             });
         };
@@ -599,7 +614,6 @@
                 errorMsg.style.display = 'block';
                 mainLoginBtn.style.display = 'none';
                 
-                // 確保雙重登入踢人功能唔會導致 Safari 崩潰
                 const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
                 set(sessionRef, mySessionId).catch(e => console.warn("Session Set Warn:", e));
                 onValue(sessionRef, (snap) => {
@@ -626,7 +640,6 @@
                     console.error("Local Storage parse error", e);
                 }
 
-                // 強制刷新 Auth Token 以避免 Safari 連線假死
                 user.getIdToken(true).then(() => {
                     try {
                         recordsRef = ref(db, 'users/' + emailKey + '/records');
@@ -654,7 +667,6 @@
             }
         });
 
-        // 🔥 使用 HTTP Get + Timeout 雙重防護，徹底防止 Safari 卡死
         function startDatabaseSync(emailKey) {
             if (!recordsRef) return;
             
@@ -712,7 +724,6 @@
                 }
             };
 
-            // 防卡死機制：如果 10 秒都拎唔到資料，彈出警告
             const timeoutId = setTimeout(() => {
                 if (document.getElementById('login-screen').style.display !== 'none') {
                     errorMsg.innerText = "⚠️ 請求超時，請檢查網絡或重新載入頁面。";
@@ -721,7 +732,6 @@
                 }
             }, 10000);
 
-            // 先強制 Get 一次確保資料到位，然後再掛載即時監聽
             get(recordsRef).then((snapshot) => {
                 clearTimeout(timeoutId);
                 handleData(snapshot);
@@ -867,8 +877,8 @@
             if (income === 0 && expense === 0) {
                 ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI, true);
                 ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor;
-                ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.stroke();
-                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); ctx.stroke(); ctx.restore(); return;
+                ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); stroke();
+                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); stroke(); ctx.restore(); return;
             }
 
             const totalSum = income + expense; const expenseShare = expense / totalSum; const incomeShare = income / totalSum;
@@ -891,7 +901,7 @@
 
                 ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, outA1, outA2); ctx.arc(centerX, centerY, innerRadius, inA2, inA1, true); ctx.closePath();
                 ctx.save(); ctx.shadowColor = 'rgba(0, 0, 0, 0.08)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 6; ctx.fillStyle = faceColor; ctx.fill(); ctx.restore();
-                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
+                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; stroke(); ctx.restore();
             };
 
             if (expense > 0) drawSegment(expStart, expEnd, '#f7a3b6');
@@ -1045,8 +1055,8 @@
             const strokeStyleColor = getComputedStyle(document.documentElement).getPropertyValue('--black-stroke').trim() || '#222222';
             if (income === 0 && expense === 0) {
                 ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI, true);
-                ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.stroke();
-                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); ctx.stroke(); ctx.restore(); return;
+                ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); stroke();
+                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); stroke(); ctx.restore(); return;
             }
 
             const totalSum = income + expense; const expenseShare = expense / totalSum; const incomeShare = income / totalSum;
@@ -1064,7 +1074,7 @@
                 if (outA2 < outA1) { let m = (sAngle+eAngle)/2; outA1 = m; outA2 = m; } if (inA2 < inA1) { let m = (sAngle+eAngle)/2; inA1 = m; inA2 = m; }
                 ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, outA1, outA2); ctx.arc(centerX, centerY, innerRadius, inA2, inA1, true); ctx.closePath();
                 ctx.save(); ctx.shadowColor = 'rgba(0, 0, 0, 0.08)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 6; ctx.fillStyle = faceColor; ctx.fill(); ctx.restore();
-                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
+                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; stroke(); ctx.restore();
             };
             if (expense > 0) drawSegment(expStart, expEnd, '#f7a3b6');
             if (income > 0) drawSegment(incStart, incEnd, '#4ab3e3'); 
@@ -1416,7 +1426,7 @@
 
         function renderRecordCategories() {
             const grid = document.getElementById('record-cat-grid'); grid.innerHTML = '';
-            const isCurrentCustom = recordState.category.includes('其他') || !categories[recordState.type].includes(recordState.category);
+            const isCurrentCustom = recordState.category.includes('編號') || recordState.category.includes('其他') || !categories[recordState.type].includes(recordState.category);
 
             categories[recordState.type].forEach(cat => {
                 const isOtherButton = cat.includes('其他'); 
