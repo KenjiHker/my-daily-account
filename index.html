@@ -16,8 +16,8 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：測試版本 0.0.3
-        const APP_VERSION = "0.0.3"; 
+        // 🌟 自動版本檢查機制：版本 0.0.4
+        const APP_VERSION = "0.0.4"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
             if (savedVersion !== APP_VERSION) {
@@ -130,8 +130,8 @@
         .center-month-selector { font-size: 18px; font-weight: bold; color: var(--text-main); display: flex; align-items: center; justify-content: center; gap: 6px; background: none; border: none; padding: 8px 12px; border-radius: 8px; flex: 1; text-align: center; }
         .triangle-down { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--text-main); display: inline-block; }
 
-        /* 🔥 看板底部 margin 設為 0px，保證與數據區「零距離」 🔥 */
-        .header-dashboard { background: var(--card-bg); border: 2px solid var(--text-main); border-radius: 24px; box-shadow: 0 6px 0 var(--text-main); padding: 12px 20px 16px; margin: 12px 16px 0px 16px; text-align: center; position: relative; overflow: hidden; touch-action: pan-y; }
+        /* 🔥 左右伸延至盡頭 (Margin 8px)，微調圓角 (20px)，底部 Margin 為 0 🔥 */
+        .header-dashboard { background: var(--card-bg); border: 2px solid var(--text-main); border-radius: 20px; box-shadow: 0 6px 0 var(--text-main); padding: 12px 20px 16px; margin: 12px 8px 0px 8px; text-align: center; position: relative; overflow: hidden; touch-action: pan-y; }
         #chart-swipe-track { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; will-change: transform; }
         .chart-container { position: relative; width: 240px; height: 240px; margin: 0 auto; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
         #pieChart { width: 240px; height: 240px; display: block; }
@@ -140,9 +140,9 @@
         .chart-center-text .title { font-size: 11px; color: var(--text-sub); font-weight: bold; margin-bottom: 1px; }
         .chart-center-text .balance { font-size: 14px; font-weight: 800; color: var(--text-main); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-        /* 🔥 歷史數據區：左右 Padding 加大至 38px (完美縮窄卡片避開圓角)，頂部 Padding 設為 0px (完美貼合陰影) 🔥 */
-        .container { flex: 1; padding: 0 38px 16px 38px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
-        .history-container { width: 100%; padding-top: 0px; } 
+        /* 🔥 歷史數據區精準縮窄：左右 Padding 設為 28px，完美對齊看板平底區，頂部 0px 🔥 */
+        .container { flex: 1; padding: 0 28px 16px 28px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
+        .history-container { width: 100%; padding-top: 16px; } 
         .empty-state-wrapper { display: flex; flex-direction: column; align-items: center; padding-top: 60px; color: var(--text-sub); }
         .empty-text-main { font-size: 15px; color: #8e8e93; font-weight: 500; }
         
@@ -305,8 +305,6 @@
         </button>
 
         <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 20px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
-        
-        <span onclick="wipeCacheAndReload()" style="font-size: 13px; color: #888; text-decoration: underline; cursor: pointer; margin-top: 30px;">無法登入？點擊清除瀏覽器快取</span>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
@@ -527,7 +525,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        // 🔒 Firebase 核心：強制使用 LocalStorage 確保 PWA 不會因 IndexedDB 損壞而卡死
+        import { getAuth, initializeAuth, browserLocalPersistence, browserPopupRedirectResolver, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -542,8 +541,11 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         
-        // 🔒 回歸最穩定、最標準嘅 getAuth()，無任何花巧設定，保證唔會報錯
-        const auth = getAuth(app);
+        // 🔒 強制停用 IndexedDB，只用 LocalStorage 存儲認證狀態，加入 Resolver 防止 argument error
+        const auth = initializeAuth(app, {
+            persistence: browserLocalPersistence,
+            popupRedirectResolver: browserPopupRedirectResolver
+        });
         const provider = new GoogleAuthProvider();
         
         let recordsRef = null; 
@@ -572,28 +574,24 @@
            }
         });
 
-        // 🟢 全自動洗機功能：徹底清除所有快取（等同手動清除 Safari 紀錄）
-        window.wipeCacheAndReload = function() {
+        // 🟢 背景靜默大掃除：保留主題同版本號，其他快取全清，防 iOS 卡死
+        window.silentWipe = function() {
             try {
-                // 保留主題同版本號，其他全清
                 const theme = localStorage.getItem('apple-app-theme');
                 const ver = localStorage.getItem('pwa_app_version');
                 localStorage.clear();
                 sessionStorage.clear();
                 if(theme) localStorage.setItem('apple-app-theme', theme);
                 if(ver) localStorage.setItem('pwa_app_version', ver);
-                // 嘗試清空 iOS 最易壞嘅 IndexedDB
                 if (window.indexedDB && window.indexedDB.databases) {
                     window.indexedDB.databases().then(dbs => {
                         dbs.forEach(db => { window.indexedDB.deleteDatabase(db.name); });
                     });
                 }
             } catch(e) {}
-            // 加時間戳強制重載
-            window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
         };
 
-        // 🟢 登入按鈕：一撳即彈，絕不被 Cancel 阻擋
+        // 🟢 單一按鈕登入：無延遲，一撳即彈，絕不被 Safari Cancel
         window.signInWithGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             errorMsg.innerText = "正在登入...";
@@ -602,13 +600,12 @@
 
             provider.setCustomParameters({ prompt: 'select_account' });
             
-            // 直接呼叫，絕無 setTimeout，確保 Safari 唔會以為係惡意彈窗
             signInWithPopup(auth, provider).catch(err => {
                 console.error(err);
                 if (err.code === 'auth/popup-blocked') {
                     errorMsg.innerText = "❌ 登入視窗被阻擋。\n請去 iPhone 設定 > Safari > 關閉「阻擋彈出式視窗」後重試。";
                 } else if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
-                    errorMsg.style.display = 'none'; // 使用者自己關閉，或者被取消，唔顯示血紅色錯誤
+                    errorMsg.style.display = 'none'; 
                 } else {
                     errorMsg.innerText = "❌ 登入失敗\n" + err.message;
                 }
@@ -616,19 +613,21 @@
             });
         };
 
-        // 🟢 登出即洗機：登出後自動洗走所有快取，保證下次入返絕對順暢
+        // 🟢 登出即「終極洗機」：登出後自動洗走所有快取，保證下次入返絕對順暢
         window.signOutGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             if (errorMsg) {
-                errorMsg.innerText = "⏳ 正在安全登出並徹底清除快取...";
+                errorMsg.innerText = "⏳ 正在清除資料並安全登出...";
                 errorMsg.style.display = 'block';
                 errorMsg.style.color = "#4ab3e3";
             }
             
             signOut(auth).then(() => {
-                wipeCacheAndReload(); // 登出後立即執行全自動大掃除
+                window.silentWipe();
+                window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
             }).catch(() => {
-                wipeCacheAndReload(); // 就算失敗都要強行洗底
+                window.silentWipe();
+                window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
             });
         };
 
@@ -672,6 +671,9 @@
                 });
 
             } else {
+                // 🛑 核心修復：一打開網頁發現未登入，立刻自動洗機，保證乾淨唔卡死！
+                window.silentWipe();
+
                 loginScreen.style.display = 'flex';
                 errorMsg.style.display = 'none';
                 statusText.innerText = '尚未登入';
@@ -743,7 +745,7 @@
 
             setTimeout(() => {
                 if (isFirstLoad && document.getElementById('login-screen').style.display !== 'none') {
-                    errorMsg.innerText = "⏳ 網絡連線較慢，正在努力同步中...";
+                    errorMsg.innerText = "⏳ 網絡連線較慢，正在努力載入中...";
                     errorMsg.style.color = "#ffb3b3";
                 }
             }, 8000);
