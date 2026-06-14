@@ -128,7 +128,6 @@
         .settings-label { font-size: 13px; font-weight: bold; color: var(--text-sub); margin-bottom: 4px; }
         .settings-action-btn { background: var(--nav-btn-bg); color: var(--text-main); border: 2px solid var(--border-color); padding: 14px 16px; border-radius: 12px; font-size: 16px; font-weight: bold; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 10px; min-height: 44px;}
 
-        /* 🔥 美化版圖表面板：新增頂部邊框，完美計數機立體風格 🔥 */
         .header-dashboard { flex-shrink: 0; background: var(--card-bg); padding: 8px 20px 20px 20px; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; border-bottom: 2px solid var(--text-main); border-top: 2px solid var(--text-main); box-shadow: 0 6px 0 var(--text-main); text-align: center; z-index: 10; margin: 0; touch-action: pan-y; position: relative; overflow: hidden; width: 100vw; }
         #chart-swipe-track { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; will-change: transform; }
         .chart-container { position: relative; width: 240px; height: 240px; margin: 0 auto; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -509,7 +508,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        // 🔥 引入 goOffline, goOnline 以強制解決 PWA 卡死問題
+        // 🔥 引入 goOffline, goOnline 喚醒資料庫
         import { getDatabase, ref, set, onValue, get, goOffline, goOnline } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
@@ -593,10 +592,14 @@
                 logoutBtn.style.display = 'flex';
                 loginBtn.style.display = 'none';
                 
-                errorMsg.innerText = "✅ Google 登入成功！\n🔄 正在喚醒並連線雲端資料庫...";
+                errorMsg.innerText = "✅ Google 登入成功！\n🔄 正在喚醒雲端連線...";
                 errorMsg.style.color = "#4ab3e3";
                 errorMsg.style.display = 'block';
                 mainLoginBtn.style.display = 'none';
+
+                // 🔥 強心針：iOS 主畫面 Bug 修復。登入後強制重啟資料庫連線，喚醒被系統休眠嘅 WebSocket
+                goOffline(db);
+                goOnline(db);
                 
                 const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
                 set(sessionRef, mySessionId).catch(e => console.warn(e));
@@ -624,18 +627,13 @@
                     console.error("Local Storage parse error", e);
                 }
 
-                // 🔥 PWA 專屬防假死機制：強制斷開並重新連線，確保 WebSocket 喚醒
-                goOffline(db);
-                setTimeout(() => {
-                    goOnline(db);
-                    try {
-                        recordsRef = ref(db, 'users/' + emailKey + '/records');
-                        startDatabaseSync(emailKey); 
-                    } catch(e) {
-                        errorMsg.innerText = "❌ 建立連線時發生錯誤：\n" + e.message;
-                        errorMsg.style.color = "#ff5b5b";
-                    }
-                }, 500);
+                try {
+                    recordsRef = ref(db, 'users/' + emailKey + '/records');
+                    startDatabaseSync(emailKey); 
+                } catch(e) {
+                    errorMsg.innerText = "❌ 建立連線時發生錯誤：\n" + e.message;
+                    errorMsg.style.color = "#ff5b5b";
+                }
 
             } else {
                 loginScreen.style.display = 'flex';
@@ -651,33 +649,34 @@
             }
         });
 
-        // 🔥 引入 8 秒超時重試機制
+        // 🔥 使用 HTTP Get 搭配 Timeout 雙重防護，防止 Safari 卡死
         function startDatabaseSync(emailKey) {
             if (!recordsRef) return;
             
             const errorMsg = document.getElementById('login-error-msg');
             errorMsg.innerText = "📥 正在請求雲端資料...";
 
-            let isResolved = false;
-            const timeoutId = setTimeout(() => {
-                if (!isResolved) {
-                    errorMsg.innerText = "⚠️ 網絡連線不穩或被系統暫停\n請重新打開 App 或點擊下方重新連線。";
+            // 防止 get() 永遠唔回傳 (iOS Safari Bug)
+            let timeout = setTimeout(() => {
+                const localData = localStorage.getItem('records_' + emailKey);
+                if (localData) {
+                    document.getElementById('login-screen').style.display = 'none';
+                    showToast('⚠️ 網路連線緩慢，正在使用本機快取');
+                } else {
+                    errorMsg.innerText = "⚠️ 網路連線緩慢，請檢查網絡或重新整理";
                     errorMsg.style.color = "#ff5b5b";
-                    const btn = document.getElementById('main-login-btn');
-                    btn.innerText = "🔄 重新連線";
-                    btn.style.display = 'flex';
-                    btn.onclick = () => location.reload();
                 }
             }, 8000);
 
             function handleData(data) {
-                isResolved = true;
-                clearTimeout(timeoutId);
                 try {
                     let cloudRecords = [];
-                    if (data) { cloudRecords = Object.values(data).filter(r => r !== null && typeof r === 'object' && r.id); }
+                    if (data) {
+                        cloudRecords = Object.values(data).filter(r => r !== null && typeof r === 'object' && r.id);
+                    }
                     window.records = cloudRecords.sort((a, b) => (b.id || 0) - (a.id || 0));
-                    try { localStorage.setItem('records_' + emailKey, JSON.stringify(window.records)); } catch(e){}
+                    
+                    try { localStorage.setItem('records_' + emailKey, JSON.stringify(window.records)); } catch(e) {}
 
                     document.getElementById('login-screen').style.display = 'none';
 
@@ -687,29 +686,31 @@
                         if (typeof window.renderModalDateRecords === 'function') window.renderModalDateRecords();
                     }
                 } catch(err) {
+                    console.error(err);
                     errorMsg.innerText = "❌ 處理雲端資料時出錯：\n" + err.message;
                     errorMsg.style.color = "#ff5b5b";
+                    document.getElementById('main-login-btn').style.display = 'flex';
                 }
             }
 
-            function handleError(error) {
-                isResolved = true;
-                clearTimeout(timeoutId);
+            function handleAuthError(error) {
+                console.error("Firebase Read Error:", error);
                 if (error.code === 'PERMISSION_DENIED') {
                     try { localStorage.removeItem('records_' + emailKey); } catch(e){}
                     window.records = [];
                     if (typeof window.syncHeaderDisplay === 'function') window.syncHeaderDisplay();
                     
+                    let currentEmail = auth.currentUser ? auth.currentUser.email : '未知';
                     document.getElementById('sidebar-auth-status').innerText = '無權限存取';
                     
                     const loginScreen = document.getElementById('login-screen');
                     loginScreen.style.display = 'flex';
                     document.getElementById('main-login-btn').style.display = 'flex';
                     
-                    let currentEmail = auth.currentUser ? auth.currentUser.email : '未知';
                     errorMsg.innerText = `⚠️ 權限不足！\n你的 Email:\n【${currentEmail}】\n未被加入白名單，無法進入首頁。`;
                     errorMsg.style.color = "#ff5b5b";
                     errorMsg.style.display = 'block';
+                    
                     signOut(auth); 
                 } else {
                     errorMsg.innerText = "❌ 讀取失敗：" + error.message;
@@ -718,11 +719,15 @@
                 }
             }
 
-            // HTTP Get + WebSocket 雙重獲取資料防卡死
+            // 強制 Get 一次防卡死，然後掛載實時監聽
             get(recordsRef).then((snapshot) => {
+                clearTimeout(timeout);
                 handleData(snapshot.val());
-                onValue(recordsRef, (snap) => handleData(snap.val()), (err) => handleError(err));
-            }).catch((err) => handleError(err));
+                onValue(recordsRef, (snap) => handleData(snap.val()), (err) => handleAuthError(err));
+            }).catch((error) => {
+                clearTimeout(timeout);
+                handleAuthError(error);
+            });
         }
 
         window.saveData = function(recordsArray) {
