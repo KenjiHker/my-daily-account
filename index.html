@@ -509,7 +509,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -524,11 +524,15 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         const auth = getAuth(app);
+        
+        // 🔒 核心指令：強制 Firebase 使用深層 LocalStorage，而唔係會被 iOS 清空嘅 Session
+        setPersistence(auth, browserLocalPersistence);
+        
         const provider = new GoogleAuthProvider();
         
         let recordsRef = null; 
         const mySessionId = Date.now().toString() + Math.random().toString();
-        let sessionListenerAttached = false; // 防止重複掛載監聽器
+        let sessionListenerAttached = false; 
 
         window.showToast = function(msg, duration = 3000) {
             const toast = document.getElementById('toast-container');
@@ -554,7 +558,6 @@
            }
         });
 
-        // 還原為最順暢嘅 signInWithPopup
         window.signInWithGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             errorMsg.innerText = "準備登入...";
@@ -575,7 +578,6 @@
                 const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
                 try { localStorage.removeItem('records_' + emailKey); } catch(e){}
                 
-                // 🛠️ 核心修復 1：手動登出時，強制清空資料庫中嘅 Session，防止下次登入時讀到舊快取！
                 const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
                 set(sessionRef, null).finally(() => {
                     signOut(auth).then(() => location.reload());
@@ -604,14 +606,12 @@
                 errorMsg.style.display = 'block';
                 mainLoginBtn.style.display = 'none';
                 
-                // 🛠️ 核心修復 2：先確實寫入新 Session，成功之後先開始監聽防雙開，避免自己踢自己出局！
                 const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
                 set(sessionRef, mySessionId).then(() => {
                     if (!sessionListenerAttached) {
                         sessionListenerAttached = true;
                         onValue(sessionRef, (snap) => {
                             const activeSession = snap.val();
-                            // 如果 activeSession 有值，而且唔等於自己部機，先至踢人
                             if (activeSession && activeSession !== mySessionId) {
                                 showToast('⚠️ 已在其他裝置/瀏覽器登入，您被迫登出！', 4000);
                                 setTimeout(() => {
@@ -779,8 +779,6 @@
             setTimeout(function() { window.scrollTo(0, 1); }, 0);
             if (!window.records) window.records = [];
             
-            document.getElementById('current-display-month-label').innerText = `${currentSelectedYear}年 ${currentSelectedMonth + 1}月`;
-            document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
             syncHeaderDisplay();
         });
         
@@ -856,8 +854,13 @@
             const centerTitle = document.getElementById('chart-center-title');
             const monthLabel = document.getElementById('current-display-month-label');
 
-            if(centerTitle) centerTitle.innerText = '月結餘';
-            if(monthLabel) monthLabel.innerText = `${currentSelectedYear}年 ${currentSelectedMonth + 1}月`;
+            if (viewMode === 'all') {
+                if(centerTitle) centerTitle.innerText = '總結餘';
+                if(monthLabel) monthLabel.innerText = `總資產`;
+            } else {
+                if(centerTitle) centerTitle.innerText = '月結餘';
+                if(monthLabel) monthLabel.innerText = `${currentSelectedYear}年 ${currentSelectedMonth + 1}月`;
+            }
             
             updateDashboard(isSwipe); renderHistory();
         }
@@ -904,16 +907,24 @@
             if (income > 0) drawSegment(incStart, incEnd, '#4ab3e3'); 
         }
 
+        // 🔥 增強：支援「全部紀錄」模式嘅 Ghost Chart
         function createGhostChart(y, m, mode, isPrev) {
             let inc = 0, exp = 0;
-            const prefix = `${y}-${(m + 1).toString().padStart(2, '0')}`;
-            records.forEach(r => { if (r.date.startsWith(prefix)) { if (r.type === 'income') inc += r.amount; else exp += r.amount; } });
+            if (mode === 'all') {
+                records.forEach(r => { if (r.type === 'income') inc += r.amount; else exp += r.amount; });
+            } else {
+                const prefix = `${y}-${(m + 1).toString().padStart(2, '0')}`;
+                records.forEach(r => { if (r.date.startsWith(prefix)) { if (r.type === 'income') inc += r.amount; else exp += r.amount; } });
+            }
+            
             const ghost = document.createElement('div'); ghost.className = 'chart-container ghost-chart'; ghost.style.position = 'absolute';
             const offset = isPrev ? -window.innerWidth : window.innerWidth; ghost.style.left = `calc(50% - 120px + ${offset}px)`; ghost.style.top = '0';
             const canvas = document.createElement('canvas'); canvas.width = 480; canvas.height = 480; canvas.style.width = '240px'; canvas.style.height = '240px'; canvas.style.display = 'block'; ghost.appendChild(canvas);
+            
             drawStaticDonut(canvas, inc, exp);
+            const titleText = mode === 'all' ? '總結餘' : '月結餘';
             const centerText = document.createElement('div'); centerText.className = 'chart-center-text';
-            centerText.innerHTML = `<div class="coin-canvas-container" style="width: 100px; height: 65px; margin-top: 8px; margin-bottom: 2px;"></div><span class="title">月結餘</span><span class="balance" style="max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">$${(inc - exp).toLocaleString()}</span>`;
+            centerText.innerHTML = `<div class="coin-canvas-container" style="width: 100px; height: 65px; margin-top: 8px; margin-bottom: 2px;"></div><span class="title">${titleText}</span><span class="balance" style="max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">$${(inc - exp).toLocaleString()}</span>`;
             ghost.appendChild(centerText); return ghost;
         }
 
@@ -926,13 +937,32 @@
                 if (!isSwiping) return; currentTouchX = e.touches[0].clientX; let deltaX = currentTouchX - touchStartX;
                 if (!hasAddedGhosts && Math.abs(deltaX) > 5) {
                     hasAddedGhosts = true;
-                    let pY = currentSelectedYear; let pM = currentSelectedMonth - 1;
-                    if (pM < 0) { pM = 11; pY--; }
-                    swipeTarget.appendChild(createGhostChart(pY, pM, 'month', true));
-                    let nY = currentSelectedYear; let nM = currentSelectedMonth + 1;
-                    if (nM > 11) { nM = 0; nY++; }
-                    swipeTarget.appendChild(createGhostChart(nY, nM, 'month', false));
+                    
+                    const _now = new Date();
+                    const isCurrentMonth = (currentSelectedYear === _now.getFullYear() && currentSelectedMonth === _now.getMonth());
+
+                    // Create Prev Ghost (Left side / Swipe Right)
+                    if (viewMode === 'all') {
+                        swipeTarget.appendChild(createGhostChart(_now.getFullYear(), _now.getMonth(), 'month', true));
+                    } else {
+                        let pY = currentSelectedYear; let pM = currentSelectedMonth - 1;
+                        if (pM < 0) { pM = 11; pY--; }
+                        swipeTarget.appendChild(createGhostChart(pY, pM, 'month', true));
+                    }
+
+                    // Create Next Ghost (Right side / Swipe Left)
+                    if (viewMode !== 'all') {
+                        if (isCurrentMonth) {
+                            swipeTarget.appendChild(createGhostChart(null, null, 'all', false));
+                        } else {
+                            let nY = currentSelectedYear; let nM = currentSelectedMonth + 1;
+                            if (nM > 11) { nM = 0; nY++; }
+                            swipeTarget.appendChild(createGhostChart(nY, nM, 'month', false));
+                        }
+                    }
                 }
+                
+                if (viewMode === 'all' && deltaX < 0) deltaX = 0; // Prevent swiping past "all"
                 swipeTarget.style.transform = `translateX(${deltaX}px)`;
             }, {passive: true});
 
@@ -940,18 +970,45 @@
                 if (!isSwiping) return; isSwiping = false; let deltaX = currentTouchX - touchStartX; const threshold = window.innerWidth * 0.2; 
                 let direction = 0; 
                 if (deltaX > threshold) { direction = -1; } else if (deltaX < -threshold) { direction = 1; }
-                if (direction !== 0) { navigateSwipe(direction); } else { swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)'; swipeTarget.style.transform = `translateX(0)`; setTimeout(() => { document.querySelectorAll('.ghost-chart').forEach(el => el.remove()); }, 500); }
+                
+                if (direction !== 0 && !(viewMode === 'all' && direction === 1)) { 
+                    navigateSwipe(direction); 
+                } else { 
+                    swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)'; 
+                    swipeTarget.style.transform = `translateX(0)`; 
+                    setTimeout(() => { document.querySelectorAll('.ghost-chart').forEach(el => el.remove()); }, 500); 
+                }
             });
 
+            // 🔥 增強：依照你要求的月份與總結餘滑動邏輯
             function navigateSwipe(direction) {
-                let targetTransformX = direction === 1 ? -window.innerWidth : window.innerWidth;
-                swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)'; swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
-                setTimeout(() => {
-                    if (direction === 1) { 
-                        currentSelectedMonth--; if (currentSelectedMonth < 0) { currentSelectedMonth = 11; currentSelectedYear--; } 
-                    } else { 
-                        currentSelectedMonth++; if (currentSelectedMonth > 11) { currentSelectedMonth = 0; currentSelectedYear++; } 
+                const _now = new Date();
+                const isCurrentMonth = (currentSelectedYear === _now.getFullYear() && currentSelectedMonth === _now.getMonth());
+
+                if (direction === 1) { // Swipe Left
+                    if (viewMode === 'all') return;
+                    if (isCurrentMonth) {
+                        viewMode = 'all';
+                    } else {
+                        currentSelectedMonth++; 
+                        if (currentSelectedMonth > 11) { currentSelectedMonth = 0; currentSelectedYear++; }
                     }
+                } else if (direction === -1) { // Swipe Right
+                    if (viewMode === 'all') {
+                        viewMode = 'month';
+                        currentSelectedYear = _now.getFullYear();
+                        currentSelectedMonth = _now.getMonth();
+                    } else {
+                        currentSelectedMonth--; 
+                        if (currentSelectedMonth < 0) { currentSelectedMonth = 11; currentSelectedYear--; }
+                    }
+                }
+
+                let targetTransformX = direction === 1 ? -window.innerWidth : window.innerWidth;
+                swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
+                
+                setTimeout(() => {
                     swipeTarget.style.transition = 'none'; 
                     swipeTarget.style.transform = `translateX(0)`; 
                     document.querySelectorAll('.ghost-chart').forEach(el => el.remove()); 
@@ -1020,8 +1077,16 @@
         }
 
         function updateDashboard(isSwipe = false) {
-            let totalIncome = 0; let totalExpense = 0; const prefix = `${currentSelectedYear}-${(currentSelectedMonth + 1).toString().padStart(2, '0')}`;
-            records.forEach(r => { if (r.date.startsWith(prefix)) { if (r.type === 'income') totalIncome += r.amount; else totalExpense += r.amount; } });
+            let totalIncome = 0; let totalExpense = 0; 
+            
+            // 🔥 增強：計算「總結餘」模式數據
+            if (viewMode === 'all') {
+                records.forEach(r => { if (r.type === 'income') totalIncome += r.amount; else totalExpense += r.amount; });
+            } else {
+                const prefix = `${currentSelectedYear}-${(currentSelectedMonth + 1).toString().padStart(2, '0')}`;
+                records.forEach(r => { if (r.date.startsWith(prefix)) { if (r.type === 'income') totalIncome += r.amount; else totalExpense += r.amount; } });
+            }
+            
             globalTotalIncome = totalIncome;
             const currentBalance = totalIncome - totalExpense; document.getElementById('total-balance').innerText = `$${currentBalance.toLocaleString()}`;
             
@@ -1422,7 +1487,7 @@
 
         function renderRecordCategories() {
             const grid = document.getElementById('record-cat-grid'); grid.innerHTML = '';
-            const isCurrentCustom = recordState.category.includes('編號') || recordState.category.includes('其他') || !categories[recordState.type].includes(recordState.category);
+            const isCurrentCustom = recordState.category.includes('其他') || !categories[recordState.type].includes(recordState.category);
 
             categories[recordState.type].forEach(cat => {
                 const isOtherButton = cat.includes('其他'); 
