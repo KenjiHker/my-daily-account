@@ -16,14 +16,13 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：每次更新代碼，請更改呢個數字 (例如改成 3.0.4)
-        const APP_VERSION = "3.0.3"; 
+        // 🌟 自動版本檢查機制：強制繞過 iOS 頑固快取
+        const APP_VERSION = "3.0.4"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
             if (savedVersion !== APP_VERSION) {
                 localStorage.setItem('pwa_app_version', APP_VERSION);
                 if (!window.location.search.includes('v=')) {
-                    // 發現新版本！強制重載最新代碼
                     window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
                 }
             }
@@ -141,8 +140,8 @@
         .chart-center-text .title { font-size: 11px; color: var(--text-sub); font-weight: bold; margin-bottom: 1px; }
         .chart-center-text .balance { font-size: 14px; font-weight: 800; color: var(--text-main); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-        /* --- 歷史明細容器區：頂部加回 16px Padding，資料會完美捐入看板下 --- */
-        .container { flex: 1; padding: 16px 16px 16px 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
+        /* --- 歷史明細容器區：頂部 Padding 設為 0，資料會完美捐入看板下 --- */
+        .container { flex: 1; padding: 0 16px 16px 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
         .history-container { width: 100%; } 
         .empty-state-wrapper { display: flex; flex-direction: column; align-items: center; padding-top: 60px; color: var(--text-sub); }
         .empty-text-main { font-size: 15px; color: #8e8e93; font-weight: 500; }
@@ -301,6 +300,7 @@
         <h1 class="login-title">家庭記帳日記</h1>
         <p class="login-subtitle">雲端同步，資料不遺失</p>
         
+        <!-- 單一最穩定原版按鈕 -->
         <button id="main-login-btn" class="google-btn" onclick="signInWithGoogle()" style="width: 80%; max-width: 320px; height: 50px;">
             <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google"> 授權 Google 帳號登入
         </button>
@@ -523,10 +523,11 @@
         </div>
     </div>
 
+    <!-- 🔥 Firebase 核心代碼：移除所有防雙開踢人機制與引致 Bug 嘅參數 🔥 -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -542,6 +543,10 @@
         const db = getDatabase(app);
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
+        
+        // 強制 Firebase 使用 LocalStorage，解決 iOS PWA 關閉後遺失登入狀態
+        setPersistence(auth, browserLocalPersistence).catch(e => console.warn(e));
+
         let recordsRef = null; 
 
         window.showToast = function(msg, duration = 3000) {
@@ -568,22 +573,24 @@
            }
         });
 
-        // 🟢 原版：單一按鈕 Popup 登入，唔會觸發 iOS 跳轉阻擋
+        // 🟢 修復：移除 prompt 參數，改為直接同步觸發 Popup，防止 iOS Safari 阻擋
         window.signInWithGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
-            errorMsg.innerText = "準備登入...";
+            errorMsg.innerText = "正在呼叫 Google 授權...";
             errorMsg.style.color = "#4ab3e3";
             errorMsg.style.display = 'block';
 
-            provider.setCustomParameters({ prompt: 'select_account' });
             signInWithPopup(auth, provider).catch(err => {
                 console.error(err);
-                errorMsg.innerText = "❌ 登入失敗\n" + err.message;
+                if (err.code === 'auth/popup-blocked') {
+                    errorMsg.innerText = "❌ 登入視窗被 Apple 阻擋。\n請去 iPhone「設定」>「Safari」> 關閉「阻擋彈出式視窗」，然後重試。";
+                } else {
+                    errorMsg.innerText = "❌ 登入失敗\n" + err.message;
+                }
                 errorMsg.style.color = "#ff5b5b";
             });
         };
 
-        // 🟢 乾淨登出：簡單直接，加 500ms 延遲確保重新載入前系統反應得切
         window.signOutGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             if (errorMsg) {
@@ -598,10 +605,8 @@
             }
             
             signOut(auth).then(() => {
-                setTimeout(() => {
-                    // 加入時間戳參數，防止 Safari 讀取舊快取
-                    window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
-                }, 500);
+                // 加時間戳參數確保不會讀舊快取
+                window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
             });
         };
 
@@ -612,7 +617,6 @@
             const logoutBtn = document.getElementById('sidebar-google-logout-btn');
 
             if (user) {
-                // 🟢 完美保留：透過 Email 綁定及獲取雲端資料
                 const emailKey = user.email.toLowerCase().replace(/\./g, ',');
                 statusText.innerText = `已登入:\n${user.email}`;
                 logoutBtn.style.display = 'flex';
@@ -655,7 +659,7 @@
             }
         });
 
-        // 🔥 使用 onValue 取代 get()，徹底防止 Safari PWA 請求超時死機 🔥
+        // 🔥 使用 onValue 取代 get()，徹底防止 Safari PWA 請求超時掛死 🔥
         function startDatabaseSync(emailKey) {
             if (!recordsRef) return;
             
@@ -709,16 +713,10 @@
                 }
             };
 
-            // 啟動資料庫監聽 (取代容易超時掛死嘅 get())
             onValue(recordsRef, (snap) => {
-                const loginScreen = document.getElementById('login-screen');
-                if (loginScreen.style.display !== 'none') {
-                    errorMsg.innerText = "✅ 同步成功！";
-                }
                 handleData(snap);
             }, (err) => handleAuthError(err));
 
-            // 如果連線好慢，只顯示溫馨提示，唔再粗暴超時中斷
             setTimeout(() => {
                 if (document.getElementById('login-screen').style.display !== 'none') {
                     errorMsg.innerText = "⏳ 網絡連線較慢，正在努力載入中...";
@@ -768,8 +766,6 @@
             setTimeout(function() { window.scrollTo(0, 1); }, 0);
             if (!window.records) window.records = [];
             
-            document.getElementById('current-display-month-label').innerText = `${currentSelectedYear}年 ${currentSelectedMonth + 1}月`;
-            document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
             syncHeaderDisplay();
         });
         
@@ -931,7 +927,6 @@
                     const _now = new Date();
                     const isCurrentMonth = (currentSelectedYear === _now.getFullYear() && currentSelectedMonth === _now.getMonth());
 
-                    // Ghost Left (Swipe Right / prev)
                     if (viewMode === 'all') {
                         swipeTarget.appendChild(createGhostChart(_now.getFullYear(), _now.getMonth(), 'month', true));
                     } else {
@@ -940,7 +935,6 @@
                         swipeTarget.appendChild(createGhostChart(pY, pM, 'month', true));
                     }
 
-                    // Ghost Right (Swipe Left / next)
                     if (viewMode !== 'all') {
                         if (isCurrentMonth) {
                             swipeTarget.appendChild(createGhostChart(null, null, 'all', false));
@@ -952,7 +946,7 @@
                     }
                 }
                 
-                if (viewMode === 'all' && deltaX < 0) deltaX = 0; // 防止在總資產時繼續向左滑
+                if (viewMode === 'all' && deltaX < 0) deltaX = 0; 
                 swipeTarget.style.transform = `translateX(${deltaX}px)`;
             }, {passive: true});
 
@@ -974,17 +968,17 @@
                 const _now = new Date();
                 const isCurrentMonth = (currentSelectedYear === _now.getFullYear() && currentSelectedMonth === _now.getMonth());
 
-                if (direction === 1) { // 向左滑
+                if (direction === 1) { 
                     if (viewMode === 'all') return;
                     if (isCurrentMonth) {
-                        viewMode = 'all'; // 當前月向左滑 -> 總結餘
+                        viewMode = 'all'; 
                     } else {
                         currentSelectedMonth++; 
                         if (currentSelectedMonth > 11) { currentSelectedMonth = 0; currentSelectedYear++; }
                     }
-                } else if (direction === -1) { // 向右滑
+                } else if (direction === -1) { 
                     if (viewMode === 'all') {
-                        viewMode = 'month'; // 總結餘向右滑 -> 當前月
+                        viewMode = 'month'; 
                         currentSelectedYear = _now.getFullYear();
                         currentSelectedMonth = _now.getMonth();
                     } else {
