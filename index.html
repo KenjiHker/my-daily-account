@@ -509,7 +509,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-        import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -528,6 +528,7 @@
         
         let recordsRef = null; 
         const mySessionId = Date.now().toString() + Math.random().toString();
+        let sessionListenerAttached = false; // 防止重複掛載監聽器
 
         window.showToast = function(msg, duration = 3000) {
             const toast = document.getElementById('toast-container');
@@ -536,21 +537,6 @@
             toast.style.display = 'block';
             setTimeout(() => { toast.style.display = 'none'; }, duration);
         };
-
-        // 🔒 新增：主動監聽跳轉回傳結果
-        getRedirectResult(auth).then((result) => {
-            if (result && result.user) {
-                console.log("重定向認證成功:", result.user.email);
-            }
-        }).catch((err) => {
-            console.error("重定向驗證出錯:", err);
-            const errorMsg = document.getElementById('login-error-msg');
-            if (errorMsg) {
-                errorMsg.innerText = "❌ 認證快取衝突，請重新登入：\n" + err.message;
-                errorMsg.style.color = "#ff5b5b";
-                errorMsg.style.display = 'block';
-            }
-        });
 
         const connRef = ref(db, ".info/connected");
         onValue(connRef, (snap) => {
@@ -568,18 +554,18 @@
            }
         });
 
-        // 🚀 修改：將 signInWithPopup 改為 signInWithRedirect
+        // 還原為最順暢嘅 signInWithPopup
         window.signInWithGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
-            errorMsg.innerText = "準備跳轉至 Google 登入頁面...";
+            errorMsg.innerText = "準備登入...";
             errorMsg.style.color = "#4ab3e3";
             errorMsg.style.display = 'block';
 
             provider.setCustomParameters({ prompt: 'select_account' });
             
-            signInWithRedirect(auth, provider).catch(err => {
+            signInWithPopup(auth, provider).catch(err => {
                 console.log(err);
-                errorMsg.innerText = "❌ 跳轉失敗\n" + err.message;
+                errorMsg.innerText = "❌ 登入失敗\n" + err.message;
                 errorMsg.style.color = "#ff5b5b";
             });
         };
@@ -588,8 +574,15 @@
             if(auth.currentUser) {
                 const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
                 try { localStorage.removeItem('records_' + emailKey); } catch(e){}
+                
+                // 🛠️ 核心修復 1：手動登出時，強制清空資料庫中嘅 Session，防止下次登入時讀到舊快取！
+                const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
+                set(sessionRef, null).finally(() => {
+                    signOut(auth).then(() => location.reload());
+                });
+            } else {
+                signOut(auth).then(() => location.reload());
             }
-            signOut(auth).then(() => location.reload());
         };
 
         onAuthStateChanged(auth, (user) => {
@@ -611,20 +604,26 @@
                 errorMsg.style.display = 'block';
                 mainLoginBtn.style.display = 'none';
                 
+                // 🛠️ 核心修復 2：先確實寫入新 Session，成功之後先開始監聽防雙開，避免自己踢自己出局！
                 const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
-                set(sessionRef, mySessionId).catch(e => console.warn("Session Set Warn:", e));
-                onValue(sessionRef, (snap) => {
-                    const activeSession = snap.val();
-                    if (activeSession && activeSession !== mySessionId) {
-                        showToast('⚠️ 已在其他裝置/瀏覽器登入，您被迫登出！', 4000);
-                        setTimeout(() => {
-                            if(auth.currentUser) {
-                                try { localStorage.removeItem('records_' + emailKey); } catch(e){}
+                set(sessionRef, mySessionId).then(() => {
+                    if (!sessionListenerAttached) {
+                        sessionListenerAttached = true;
+                        onValue(sessionRef, (snap) => {
+                            const activeSession = snap.val();
+                            // 如果 activeSession 有值，而且唔等於自己部機，先至踢人
+                            if (activeSession && activeSession !== mySessionId) {
+                                showToast('⚠️ 已在其他裝置/瀏覽器登入，您被迫登出！', 4000);
+                                setTimeout(() => {
+                                    if(auth.currentUser) {
+                                        try { localStorage.removeItem('records_' + emailKey); } catch(e){}
+                                    }
+                                    signOut(auth).then(() => location.reload());
+                                }, 2500);
                             }
-                            signOut(auth).then(() => location.reload());
-                        }, 2500);
+                        }, (err) => console.warn("Session Listener Warn:", err));
                     }
-                }, (err) => console.warn("Session Listener Warn:", err));
+                }).catch(e => console.warn("Session Set Warn:", e));
 
                 try {
                     const localData = localStorage.getItem('records_' + emailKey);
