@@ -105,6 +105,7 @@
         }
         [data-theme="dark"] #connection-dot { background-color: #2c2c2e; color: #ccc; }
 
+        /* 🔥 合併頂部導覽列與圓餅圖面板，實現無縫遮擋 🔥 */
         .top-section-wrapper { flex-shrink: 0; background-color: var(--bg-color); z-index: 10; position: relative; padding-bottom: 12px; }
         .top-action-bar { display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 0 20px; }
         .left-btns { display: flex; gap: 8px; align-items: center; width: 44px; }
@@ -115,6 +116,7 @@
         .center-month-selector { font-size: 18px; font-weight: bold; color: var(--text-main); display: flex; align-items: center; justify-content: center; gap: 6px; background: none; border: none; padding: 8px 12px; border-radius: 8px; flex: 1; text-align: center; }
         .triangle-down { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--text-main); display: inline-block; }
 
+        /* 🔥 計數機風格美化圓餅圖看板 🔥 */
         .header-dashboard { background: var(--card-bg); border: 2px solid var(--text-main); border-radius: 24px; box-shadow: 0 6px 0 var(--text-main); padding: 12px 20px 16px; margin: 12px 16px 0 16px; text-align: center; position: relative; overflow: hidden; touch-action: pan-y; }
         #chart-swipe-track { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; will-change: transform; }
         .chart-container { position: relative; width: 240px; height: 240px; margin: 0 auto; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -124,6 +126,8 @@
         .chart-center-text .title { font-size: 11px; color: var(--text-sub); font-weight: bold; margin-bottom: 1px; }
         .chart-center-text .balance { font-size: 14px; font-weight: 800; color: var(--text-main); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+        /* --- 歷史明細容器區 --- */
+        /* 取消頂部 padding，讓資料滑動時完美消失在黃色底板下 */
         .container { flex: 1; padding: 0 16px 16px 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
         .history-container { width: 100%; } 
         .empty-state-wrapper { display: flex; flex-direction: column; align-items: center; padding-top: 60px; color: var(--text-sub); }
@@ -573,17 +577,47 @@
             });
         };
 
+        // 🔥 終極更新：加入 800ms 延遲與深層清理 LocalStorage 嘅安全登出邏輯 🔥
         window.signOutGoogle = function() {
+            const errorMsg = document.getElementById('login-error-msg');
+            if (errorMsg) {
+                errorMsg.innerText = "⏳ 正在安全登出並清理資料...";
+                errorMsg.style.display = 'block';
+                errorMsg.style.color = "#4ab3e3";
+            }
+
             if(auth.currentUser) {
                 const emailKey = auth.currentUser.email.toLowerCase().replace(/\./g, ',');
+                
+                // 1. 先清空你自己寫嘅本地記帳紀錄
                 try { localStorage.removeItem('records_' + emailKey); } catch(e){}
                 
+                // 2. [極端保險] 手動暴力清空 Firebase 殘留喺 LocalStorage 嘅 Auth Token
+                try {
+                    Object.keys(localStorage).forEach(key => {
+                        if (key.startsWith('firebase:authUser:')) {
+                            localStorage.removeItem(key);
+                        }
+                    });
+                } catch(e){}
+
+                // 3. 清空資料庫嘅 Session，防止雙開誤判
                 const sessionRef = ref(db, 'users/' + emailKey + '/currentSession');
                 set(sessionRef, null).finally(() => {
-                    signOut(auth).then(() => location.reload());
+                    // 4. 執行 Firebase 登出
+                    signOut(auth).then(() => {
+                        // 5. 加入黃金 800ms 延遲，等 iOS 寫入硬碟
+                        setTimeout(() => {
+                            location.reload();
+                        }, 800);
+                    });
                 });
             } else {
-                signOut(auth).then(() => location.reload());
+                signOut(auth).then(() => {
+                    setTimeout(() => {
+                        location.reload();
+                    }, 800);
+                });
             }
         };
 
@@ -907,7 +941,6 @@
             if (income > 0) drawSegment(incStart, incEnd, '#4ab3e3'); 
         }
 
-        // 🔥 增強：支援「全部紀錄」模式嘅 Ghost Chart
         function createGhostChart(y, m, mode, isPrev) {
             let inc = 0, exp = 0;
             if (mode === 'all') {
@@ -941,7 +974,6 @@
                     const _now = new Date();
                     const isCurrentMonth = (currentSelectedYear === _now.getFullYear() && currentSelectedMonth === _now.getMonth());
 
-                    // Create Prev Ghost (Left side / Swipe Right)
                     if (viewMode === 'all') {
                         swipeTarget.appendChild(createGhostChart(_now.getFullYear(), _now.getMonth(), 'month', true));
                     } else {
@@ -950,7 +982,6 @@
                         swipeTarget.appendChild(createGhostChart(pY, pM, 'month', true));
                     }
 
-                    // Create Next Ghost (Right side / Swipe Left)
                     if (viewMode !== 'all') {
                         if (isCurrentMonth) {
                             swipeTarget.appendChild(createGhostChart(null, null, 'all', false));
@@ -962,7 +993,7 @@
                     }
                 }
                 
-                if (viewMode === 'all' && deltaX < 0) deltaX = 0; // Prevent swiping past "all"
+                if (viewMode === 'all' && deltaX < 0) deltaX = 0; 
                 swipeTarget.style.transform = `translateX(${deltaX}px)`;
             }, {passive: true});
 
@@ -980,12 +1011,11 @@
                 }
             });
 
-            // 🔥 增強：依照你要求的月份與總結餘滑動邏輯
             function navigateSwipe(direction) {
                 const _now = new Date();
                 const isCurrentMonth = (currentSelectedYear === _now.getFullYear() && currentSelectedMonth === _now.getMonth());
 
-                if (direction === 1) { // Swipe Left
+                if (direction === 1) { 
                     if (viewMode === 'all') return;
                     if (isCurrentMonth) {
                         viewMode = 'all';
@@ -993,7 +1023,7 @@
                         currentSelectedMonth++; 
                         if (currentSelectedMonth > 11) { currentSelectedMonth = 0; currentSelectedYear++; }
                     }
-                } else if (direction === -1) { // Swipe Right
+                } else if (direction === -1) { 
                     if (viewMode === 'all') {
                         viewMode = 'month';
                         currentSelectedYear = _now.getFullYear();
@@ -1079,7 +1109,6 @@
         function updateDashboard(isSwipe = false) {
             let totalIncome = 0; let totalExpense = 0; 
             
-            // 🔥 增強：計算「總結餘」模式數據
             if (viewMode === 'all') {
                 records.forEach(r => { if (r.type === 'income') totalIncome += r.amount; else totalExpense += r.amount; });
             } else {
