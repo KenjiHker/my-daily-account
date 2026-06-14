@@ -16,8 +16,8 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：強制繞過 iOS 頑固快取
-        const APP_VERSION = "3.0.9"; 
+        // 🌟 自動版本檢查機制：測試版本 0.0.2
+        const APP_VERSION = "0.0.2"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
             if (savedVersion !== APP_VERSION) {
@@ -130,7 +130,7 @@
         .center-month-selector { font-size: 18px; font-weight: bold; color: var(--text-main); display: flex; align-items: center; justify-content: center; gap: 6px; background: none; border: none; padding: 8px 12px; border-radius: 8px; flex: 1; text-align: center; }
         .triangle-down { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--text-main); display: inline-block; }
 
-        /* 🔥 看板底部 margin 設為 0px，保證與數據區「零距離」 🔥 */
+        /* 看板底部 margin 設為 0px，保證與數據區「零距離」 🔥 */
         .header-dashboard { background: var(--card-bg); border: 2px solid var(--text-main); border-radius: 24px; box-shadow: 0 6px 0 var(--text-main); padding: 12px 20px 16px; margin: 12px 16px 0px 16px; text-align: center; position: relative; overflow: hidden; touch-action: pan-y; }
         #chart-swipe-track { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; will-change: transform; }
         .chart-container { position: relative; width: 240px; height: 240px; margin: 0 auto; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -140,9 +140,9 @@
         .chart-center-text .title { font-size: 11px; color: var(--text-sub); font-weight: bold; margin-bottom: 1px; }
         .chart-center-text .balance { font-size: 14px; font-weight: 800; color: var(--text-main); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-        /* 🔥 歷史數據區：左右 Padding 加大至 24px (縮窄卡片)，頂部 Padding 設為 0px (完美貼合陰影) 🔥 */
-        .container { flex: 1; padding: 0 24px 16px 24px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
-        .history-container { width: 100%; padding-top: 0px; } 
+        /* 🔥 歷史數據區：左右 Padding 加大至 32px (縮窄卡片)，頂部 Padding 設為 0px (完美貼合陰影) 🔥 */
+        .container { flex: 1; padding: 0 32px 16px 32px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(100px + env(safe-area-inset-bottom)); background-color: var(--bg-color); }
+        .history-container { width: 100%; padding-top: 16px; } 
         .empty-state-wrapper { display: flex; flex-direction: column; align-items: center; padding-top: 60px; color: var(--text-sub); }
         .empty-text-main { font-size: 15px; color: #8e8e93; font-weight: 500; }
         
@@ -305,6 +305,8 @@
         </button>
 
         <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 20px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
+        
+        <span onclick="wipeCacheAndReload()" style="font-size: 13px; color: #888; text-decoration: underline; cursor: pointer; margin-top: 30px;">無法登入？點擊清除瀏覽器快取</span>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
@@ -525,7 +527,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-        import { initializeAuth, browserLocalPersistence, browserPopupRedirectResolver, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        // 🔒 回歸最原生、最穩定嘅 getAuth，唔再用會報錯嘅 custom initializeAuth
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDPYjhR8u6m6BpdSEXM88vJP0OraFLkd6Y",
@@ -539,13 +542,7 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-        
-        // 🔒 強制綁定 LocalStorage 與 Popup 解析器，徹底解決 `argument-error` 與 Safari 快取掛死
-        const auth = initializeAuth(app, {
-            persistence: browserLocalPersistence,
-            popupRedirectResolver: browserPopupRedirectResolver
-        });
-        
+        const auth = getAuth(app); // 用返原生最穩定配置
         const provider = new GoogleAuthProvider();
         let recordsRef = null; 
 
@@ -573,38 +570,35 @@
            }
         });
 
-        // 🟢 全自動大掃除：清空一切 Cookies、LocalStorage 同 IndexedDB
+        // 🟢 全自動洗機功能：徹底清除所有快取（等同手動清除 Safari 紀錄）
         window.wipeCacheAndReload = function() {
             try {
+                // 保留主題同版本號，其他全清
                 const theme = localStorage.getItem('apple-app-theme');
                 const ver = localStorage.getItem('pwa_app_version');
                 localStorage.clear();
                 sessionStorage.clear();
                 if(theme) localStorage.setItem('apple-app-theme', theme);
                 if(ver) localStorage.setItem('pwa_app_version', ver);
-                window.indexedDB.deleteDatabase('firebaseLocalStorageDb');
             } catch(e) {}
+            // 加時間戳強制重載
             window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
         };
 
         // 🟢 登入前「極速大掃除」，保證乾淨登入唔卡死
-        window.signInWithGoogle = function() {
+        window.signInWithGoogle = async function() {
             const errorMsg = document.getElementById('login-error-msg');
-            errorMsg.innerText = "正在清理舊緩存並準備登入...";
+            errorMsg.innerText = "正在清理環境並準備登入...";
             errorMsg.style.color = "#4ab3e3";
             errorMsg.style.display = 'block';
 
-            // 登入前強制剷除可能卡死嘅 Firebase Token
-            try {
-                Object.keys(localStorage).forEach(key => {
-                    if (key.startsWith('firebase:authUser:')) localStorage.removeItem(key);
-                });
-                window.indexedDB.deleteDatabase('firebaseLocalStorageDb');
-            } catch(e) {}
+            // 登入前強制執行一次 Firebase 原生登出，確保無幽靈狀態卡住
+            try { await signOut(auth); } catch(e) {}
 
             setTimeout(() => {
-                errorMsg.innerText = "準備登入...";
+                errorMsg.innerText = "準備彈出登入視窗...";
                 provider.setCustomParameters({ prompt: 'select_account' });
+                
                 signInWithPopup(auth, provider).catch(err => {
                     console.error(err);
                     if (err.code === 'auth/popup-blocked') {
@@ -617,7 +611,7 @@
             }, 300);
         };
 
-        // 🟢 登出即「終極洗機」：保證下次登入 100% 唔會卡死
+        // 🟢 登出即「終極洗機」：登出後自動洗走所有快取，保證下次入返絕對順暢
         window.signOutGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             if (errorMsg) {
@@ -626,16 +620,11 @@
                 errorMsg.style.color = "#4ab3e3";
             }
             
-            let isReloaded = false;
-            const forceWipeAndReload = () => {
-                if (isReloaded) return;
-                isReloaded = true;
+            signOut(auth).then(() => {
                 wipeCacheAndReload();
-            };
-
-            // 無論 Firebase signOut 有冇卡死，0.8 秒後強制洗機重載
-            setTimeout(forceWipeAndReload, 800);
-            signOut(auth).then(forceWipeAndReload).catch(forceWipeAndReload);
+            }).catch(() => {
+                wipeCacheAndReload();
+            });
         };
 
         onAuthStateChanged(auth, (user) => {
@@ -749,7 +738,7 @@
 
             setTimeout(() => {
                 if (isFirstLoad && document.getElementById('login-screen').style.display !== 'none') {
-                    errorMsg.innerText = "⏳ 網絡連線較慢，正在努力載入中...";
+                    errorMsg.innerText = "⏳ 網絡連線較慢，正在努力同步中...";
                     errorMsg.style.color = "#ffb3b3";
                 }
             }, 8000);
