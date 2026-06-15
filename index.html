@@ -16,8 +16,8 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：版本 1.0.4 (完美高度動畫修復版)
-        const APP_VERSION = "1.0.4"; 
+        // 🌟 自動版本檢查機制：版本 1.0.5 (絲滑高度修復版)
+        const APP_VERSION = "1.0.5"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
             if (savedVersion !== APP_VERSION) {
@@ -195,7 +195,9 @@
         .action-cancel-block-btn { flex: 1; height: 50px; background: var(--nav-btn-bg); color: var(--text-main); border: 2.5px solid #222222; border-radius: var(--radius-sub); font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 #222222; }
         [data-theme="dark"] .action-cancel-block-btn { border-color: #ffffff; box-shadow: 0 4px 0 #ffffff; }
 
-        .calendar-sheet { height: 100dvh !important; max-height: 100dvh !important; border-radius: 0 !important; display: flex; flex-direction: column; border-top: none !important; background: var(--bg-color) !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: 0 !important; overflow: hidden !important; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1) !important; will-change: transform; }
+        /* 🔥 日曆彈窗背景與首頁一致，且取消打開時的動畫 🔥 */
+        #calendarModal { transition: none !important; }
+        .calendar-sheet { height: 100dvh !important; max-height: 100dvh !important; border-radius: 0 !important; display: flex; flex-direction: column; border-top: none !important; background: var(--bg-color) !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: 0 !important; overflow: hidden !important; will-change: transform; }
         
         #modal-date-records { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(60px + env(safe-area-inset-bottom)); padding-left: 16px; padding-right: 16px; }
         
@@ -308,7 +310,7 @@
 
         <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 20px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
         
-        <div style="position: absolute; bottom: 30px; font-size: 12px; color: var(--text-sub); font-weight: bold;">Version: 1.0.4</div>
+        <div style="position: absolute; bottom: 30px; font-size: 12px; color: var(--text-sub); font-weight: bold;">Version: 1.0.5</div>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
@@ -511,7 +513,7 @@
                 <button class="calc-btn btn-num" onclick="pressRecordCalc('1')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M24,15 C28,13 31,10 32,11 C31,18 32,26 32,31" /></svg></button>
                 <button class="calc-btn btn-num" onclick="pressRecordCalc('2')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M21,14 C23,10 34,9 34,15 C34,21 28,26 22,31 C28,31 36,30.5 38,31" /></svg></button>
                 <button class="calc-btn btn-num" onclick="pressRecordCalc('3')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M22,12 C30,11 36,13 32,19 C38,22 34,31 24,29" /></svg></button>
-                <button class="calc-btn btn-op" onclick="pressRecordCalc('+')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M18,20 C28,19 34,21 42,20" /><path d="M30,9 C29,18 31,26 30,32" /></svg></button>
+                <button class="calc-btn btn-op" onclick="pressRecordCalc('按')"><svg class="handdrawn-font-svg" viewBox="0 0 60 40"><path d="M18,20 C28,19 34,21 42,20" /><path d="M30,9 C29,18 31,26 30,32" /></svg></button>
                 
                 <button class="calc-btn btn-eq" style="grid-row: span 2;" onclick="pressRecordCalc('OK')">
                     <svg class="handdrawn-font-svg" viewBox="0 0 60 90">
@@ -849,14 +851,43 @@
                     const newDateStr = cell.getAttribute('data-date');
                     selectedDateStr = newDateStr;
                     
-                    // 🌟 智能跨月自動跳轉邏輯
+                    // 🌟 智能跨月點擊自動跳轉邏輯
                     const parts = newDateStr.split('-');
                     const clickedYear = parseInt(parts[0], 10);
                     const clickedMonth = parseInt(parts[1], 10) - 1;
 
                     if (clickedYear !== displayYear || clickedMonth !== displayMonth) {
+                        let direction = 1; // 預設向左滑 (下個月)
+                        if (clickedYear < displayYear || (clickedYear === displayYear && clickedMonth < displayMonth)) {
+                            direction = -1; // 向右滑 (上個月)
+                        }
+                        
                         displayYear = clickedYear;
                         displayMonth = clickedMonth;
+                        
+                        // 執行動畫跳轉
+                        const swipeTarget = document.getElementById('cal-swipe-track');
+                        const trackWidth = swipeTarget.offsetWidth;
+                        
+                        // 製造一個臨時的 ghost 日曆來做動畫過渡
+                        const oldY = displayYear;
+                        const oldM = displayMonth;
+                        const ghost = createGhostCal(oldY, oldM, direction === -1);
+                        swipeTarget.appendChild(ghost);
+                        
+                        let targetTransformX = direction === 1 ? -(trackWidth + 20) : (trackWidth + 20);
+                        swipeTarget.style.transition = 'transform 0.3s ease-out';
+                        swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
+                        
+                        setTimeout(() => {
+                            swipeTarget.style.transition = 'none';
+                            swipeTarget.style.transform = `translateX(0)`;
+                            document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
+                            showMonthRecords = false;
+                            renderGridCalendar();
+                            renderModalDateRecords();
+                        }, 300);
+                        return; // 動畫中會重新 render，跳出
                     }
                     
                     showMonthRecords = false;
