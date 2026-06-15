@@ -16,8 +16,8 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：版本 1.0.7 (日曆數據聯動同邊界修復版)
-        const APP_VERSION = "1.0.7"; 
+        // 🌟 自動版本檢查機制：版本 1.0.8 (極致無邊界聯動滑動版)
+        const APP_VERSION = "1.0.8"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
             if (savedVersion !== APP_VERSION) {
@@ -195,18 +195,23 @@
         .action-cancel-block-btn { flex: 1; height: 50px; background: var(--nav-btn-bg); color: var(--text-main); border: 2.5px solid #222222; border-radius: var(--radius-sub); font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 #222222; }
         [data-theme="dark"] .action-cancel-block-btn { border-color: #ffffff; box-shadow: 0 4px 0 #ffffff; }
 
-        /* 🔥 移除開啟日曆嘅過渡動畫，直接顯示 🔥 */
+        /* 🔥 移除日曆頂部按鈕方框，變成簡潔純文字 🔥 */
+        .cal-ctrl-btn { background: transparent; border: none; box-shadow: none; font-size: 18px; font-weight: bold; color: var(--text-main); display: flex; align-items: center; justify-content: center; min-width: 44px; opacity: 1; transition: opacity 0.2s; cursor: pointer; }
+        .cal-ctrl-btn:active { opacity: 0.5; background: transparent !important; }
+
+        /* 🔥 移除開啟日曆嘅過渡動畫，直接無延遲顯示 🔥 */
         #calendarModal { transition: none !important; }
         .calendar-sheet { height: 100dvh !important; max-height: 100dvh !important; border-radius: 0 !important; display: flex; flex-direction: column; border-top: none !important; background: var(--bg-color) !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: 0 !important; overflow: hidden !important; animation: none !important; transition: none !important; will-change: transform; }
         
-        /* 日曆底下明細 Padding，左右對齊首頁 28px */
-        #modal-date-records { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(60px + env(safe-area-inset-bottom)); padding-left: 28px; padding-right: 28px; }
+        /* 🔥 全螢幕邊緣滑動容器，完全無 Padding，保證由最邊緣出嚟 🔥 */
+        #cal-swipe-viewport { flex: 1; position: relative; width: 100vw; overflow: hidden; display: flex; flex-direction: column; padding-top: 4px; }
         
-        /* 🔥 移除 padding left/right 確保軌道填滿 100vw，徹底解決邊緣漏出問題 🔥 */
-        #cal-swipe-viewport { padding: 4px 0 12px 0; box-sizing: border-box; overflow: hidden; clip-path: inset(0); transform: translateZ(0); -webkit-mask-image: -webkit-radial-gradient(white, black); width: 100vw; }
+        /* 🔥 聯動滑動車廂 🔥 */
+        .calendar-page { width: 100vw; height: 100%; flex-shrink: 0; display: flex; flex-direction: column; background: transparent; }
+        .calendar-grid-wrapper { flex-shrink: 0; padding-bottom: 24px; background: transparent; }
 
-        /* 🔥 日曆大方形美化：計數機實體按鈕風格，設定絕對寬度 100vw - 32px 🔥 */
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; gap: 8px; text-align: center; padding: 16px 12px; background: var(--card-bg); border-radius: 20px; border: 2px solid var(--text-main); box-shadow: 0 4px 0 var(--text-main); box-sizing: border-box; width: calc(100vw - 32px); margin: 0 16px; flex-shrink: 0; }
+        /* 🔥 日曆無邊界大方形美化：移除左右黑邊，拉闊至 100vw 🔥 */
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; gap: 8px; text-align: center; padding: 16px 12px; background: var(--card-bg); border-radius: 0; border-top: 2px solid var(--text-main); border-bottom: 2px solid var(--text-main); border-left: none; border-right: none; box-shadow: 0 4px 0 var(--text-main); box-sizing: border-box; width: 100vw; margin: 0; flex-shrink: 0; }
         .cal-week-title { font-size: 14px; font-weight: 900; color: var(--text-main); padding: 4px 0; }
         .cal-day { font-size: 16px; font-weight: 900; color: var(--text-main); display: flex; align-items: center; justify-content: center; position: relative; aspect-ratio: 1; margin: 0 auto; width: 100%; max-width: 44px; height: auto; background-color: var(--card-bg); border-radius: 12px; border: 2px solid var(--text-main); box-shadow: 0 3px 0 var(--text-main); transition: transform 0.1s, box-shadow 0.1s; }
         .cal-day:active:not(.blur-day) { transform: translateY(3px); box-shadow: 0 0px 0 var(--text-main); }
@@ -226,7 +231,7 @@
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         @keyframes slideDownIn { from { transform: translateY(-100%); } to { transform: translateY(0); } }
         
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 0 16px; }
         .modal-title { font-size: 17px; font-weight: 800; color: var(--text-main); }
         .modal-close { font-size: 20px; color: var(--text-sub); background: none; border: none; padding: 4px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center;}
         
@@ -314,7 +319,7 @@
         <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 20px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
         
         <!-- 🔥 登入畫面底部英文版本號 🔥 -->
-        <div style="position: absolute; bottom: 30px; font-size: 12px; color: var(--text-sub); font-weight: bold;">Version: 1.0.7</div>
+        <div style="position: absolute; bottom: 30px; font-size: 12px; color: var(--text-sub); font-weight: bold;">Version: 1.0.8</div>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
@@ -338,7 +343,7 @@
                 <span class="settings-label">雲端帳號登入</span>
                 <div id="sidebar-auth-status" style="font-size: 14px; color: var(--text-main); margin-bottom: 8px; font-weight: 600; word-break: break-all;">檢查狀態中...</div>
                 
-                <button id="sidebar-google-logout-btn" class="google-btn" onclick="signInWithGoogle()" style="display: none; background-color: #eef7fc; color: #4ab3e3; border-color: #4ab3e3;">
+                <button id="sidebar-google-login-btn" class="google-btn" onclick="signInWithGoogle()" style="display: none; background-color: #eef7fc; color: #4ab3e3; border-color: #4ab3e3;">
                     重新登入
                 </button>
                 <button id="sidebar-google-logout-btn" class="google-btn" onclick="signOutGoogle()" style="display: none; background-color: #fff5f5; color: #ff5b5b; border-color: #ff5b5b;">
@@ -404,26 +409,29 @@
 
     <div class="modal-overlay" id="calendarModal" onclick="closeCalendarModal(event)">
         <div class="modal-sheet calendar-sheet" onclick="event.stopPropagation()">
-            <div class="modal-header" style="display: flex; align-items: center; justify-content: space-between;">
+            <div class="modal-header">
                 <div style="width: 44px;"></div>
                 <div style="display: flex; align-items: center; justify-content: center; gap: 4px; flex: 1;">
-                    <!-- 🔥 移除日曆頂部左右按鈕嘅方框 🔥 -->
-                    <button class="cal-ctrl-btn" onclick="adjustCalendarMonth(-1, true)" style="min-width: 44px; padding: 0; background: transparent; border: none; box-shadow: none; font-size: 18px; font-weight: bold; color: var(--text-main);">◀</button>
+                    <button class="cal-ctrl-btn" onclick="adjustCalendarMonth(-1, true)">◀</button>
                     <span id="cal-month-title" style="font-weight:900; font-size:17px; color:var(--text-main);">加載中...</span>
-                    <button class="cal-ctrl-btn" onclick="adjustCalendarMonth(1, true)" style="min-width: 44px; padding: 0; background: transparent; border: none; box-shadow: none; font-size: 18px; font-weight: bold; color: var(--text-main);">▶</button>
+                    <button class="cal-ctrl-btn" onclick="adjustCalendarMonth(1, true)">▶</button>
                 </div>
-                <button class="modal-close" onclick="closeCalendarModal(null)" style="min-width: 44px;">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v9h9"></path><circle cx="12" cy="12" r="3.5" fill="var(--card-bg)" stroke="currentColor"></circle></svg>
+                <button class="modal-close" onclick="closeCalendarModal(null)">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v9h9"></path><circle cx="12" cy="12" r="3.5" fill="var(--bg-color)" stroke="currentColor"></circle></svg>
                 </button>
             </div>
             
             <div id="cal-swipe-viewport">
                 <div id="cal-swipe-track" style="position: relative; width: 100%; will-change: transform; display: flex; align-items: flex-start;">
-                    <div class="calendar-grid" id="calendar-grid-container"></div>
+                    <!-- 🔥 聯動滑動車廂 🔥 -->
+                    <div class="calendar-page main-page" id="main-calendar-page">
+                        <div class="calendar-grid-wrapper" id="calendar-grid-wrapper">
+                            <div class="calendar-grid" id="calendar-grid-container"></div>
+                        </div>
+                        <div id="modal-date-records" style="flex: 1; overflow-y: auto; padding: 0 28px calc(60px + env(safe-area-inset-bottom)) 28px;"></div>
+                    </div>
                 </div>
             </div>
-
-            <div id="modal-date-records"></div>
         </div>
     </div>
 
@@ -535,7 +543,6 @@
         </div>
     </div>
 
-    <!-- Firebase 核心代碼 -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
@@ -586,6 +593,7 @@
            }
         });
 
+        // 🟢 背景靜默大掃除
         window.silentWipe = function() {
             try {
                 const theme = localStorage.getItem('apple-app-theme');
@@ -630,7 +638,11 @@
                 errorMsg.style.color = "#4ab3e3";
             }
             
-            signOut(auth);
+            signOut(auth).then(() => {
+                window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
+            }).catch(() => {
+                window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
+            });
         };
 
         onAuthStateChanged(auth, (user) => {
@@ -744,7 +756,7 @@
 
             setTimeout(() => {
                 if (isFirstLoad && document.getElementById('login-screen').style.display !== 'none') {
-                    errorMsg.innerText = "⏳ 網絡連線較慢，正在努力同步中...";
+                    errorMsg.innerText = "⏳ 網絡連線較慢，正在努力載入中...";
                     errorMsg.style.color = "#ffb3b3";
                 }
             }, 8000);
@@ -857,19 +869,16 @@
                 const cell = e.target.closest('.cal-day');
                 if (cell && !cell.classList.contains('cal-week-title')) {
                     const newDateStr = cell.getAttribute('data-date');
-                    selectedDateStr = newDateStr;
                     
-                    // 🌟 智能跨月自動跳轉邏輯
                     const parts = newDateStr.split('-');
                     const clickedYear = parseInt(parts[0], 10);
                     const clickedMonth = parseInt(parts[1], 10) - 1;
 
                     if (clickedYear !== displayYear || clickedMonth !== displayMonth) {
-                        // 判斷係上個月定下個月，並執行動畫跳轉
                         const direction = (clickedYear > displayYear || (clickedYear === displayYear && clickedMonth > displayMonth)) ? 1 : -1;
-                        showMonthRecords = false; // 強制選中該日，而非顯示整月
-                        adjustCalendarMonth(direction, true);
+                        adjustCalendarMonth(direction, true, newDateStr);
                     } else {
+                        selectedDateStr = newDateStr;
                         showMonthRecords = false;
                         renderGridCalendar(false);
                         renderModalDateRecords();
@@ -968,7 +977,6 @@
                     const _now = new Date();
                     const isCurrentMonth = (currentSelectedYear === _now.getFullYear() && currentSelectedMonth === _now.getMonth());
 
-                    // Ghost Left (Swipe Right / prev)
                     if (viewMode === 'all') {
                         swipeTarget.appendChild(createGhostChart(_now.getFullYear(), _now.getMonth(), 'month', true));
                     } else {
@@ -977,7 +985,6 @@
                         swipeTarget.appendChild(createGhostChart(pY, pM, 'month', true));
                     }
 
-                    // Ghost Right (Swipe Left / next)
                     if (viewMode !== 'all') {
                         if (isCurrentMonth) {
                             swipeTarget.appendChild(createGhostChart(null, null, 'all', false));
@@ -989,7 +996,7 @@
                     }
                 }
                 
-                if (viewMode === 'all' && deltaX < 0) deltaX = 0; // 防止在總資產時繼續向左滑
+                if (viewMode === 'all' && deltaX < 0) deltaX = 0; 
                 swipeTarget.style.transform = `translateX(${deltaX}px)`;
             }, {passive: true});
 
@@ -1011,17 +1018,17 @@
                 const _now = new Date();
                 const isCurrentMonth = (currentSelectedYear === _now.getFullYear() && currentSelectedMonth === _now.getMonth());
 
-                if (direction === 1) { // 向左滑
+                if (direction === 1) { 
                     if (viewMode === 'all') return;
                     if (isCurrentMonth) {
-                        viewMode = 'all'; // 當前月向左滑 -> 總結餘
+                        viewMode = 'all'; 
                     } else {
                         currentSelectedMonth++; 
                         if (currentSelectedMonth > 11) { currentSelectedMonth = 0; currentSelectedYear++; }
                     }
-                } else if (direction === -1) { // 向右滑
+                } else if (direction === -1) { 
                     if (viewMode === 'all') {
-                        viewMode = 'month'; // 總結餘向右滑 -> 當前月
+                        viewMode = 'month'; 
                         currentSelectedYear = _now.getFullYear();
                         currentSelectedMonth = _now.getMonth();
                     } else {
@@ -1043,31 +1050,127 @@
             }
         }
 
+        // 🔥 全新日曆明細生成器：主頁化設計 🔥
+        function getRecordsHTML(y, m, specificDate = null) {
+            let targetRecords = [];
+            if (specificDate === null) {
+                const prefix = `${y}-${(m + 1).toString().padStart(2, '0')}`;
+                targetRecords = records.filter(r => r.date.startsWith(prefix));
+            } else {
+                targetRecords = records.filter(r => r.date === specificDate);
+            }
+
+            if (targetRecords.length === 0) { 
+                return `<div style="text-align:center; padding:24px 16px; font-size:15px; font-weight:900; color:var(--text-main);">📍 該月份尚無收支細明</div>`; 
+            }
+
+            targetRecords.sort((a, b) => {
+                if (a.date !== b.date) return new Date(b.date) - new Date(a.date);
+                return b.id - a.id;
+            });
+
+            let html = '';
+            const groupedRecords = {}; 
+            targetRecords.forEach(r => { if (!groupedRecords[r.date]) groupedRecords[r.date] = []; groupedRecords[r.date].push(r); });
+
+            Object.keys(groupedRecords).sort((a, b) => new Date(b) - new Date(a)).forEach(dateStr => {
+                const dayRecords = groupedRecords[dateStr]; 
+                const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']; 
+                const dayOfWeekStr = weekDays[new Date(dateStr).getDay()];
+                
+                let daySum = 0; dayRecords.forEach(dr => { daySum += dr.amount; });
+                
+                html += `<div class="date-group">
+                            <div class="date-header">
+                                <span>${dateStr.replace(/-/g, '/')} ${dayOfWeekStr}</span>
+                                <span class="date-summary-total">$${daySum.toLocaleString()}</span>
+                            </div>`;
+
+                dayRecords.forEach(item => {
+                    const icon = item.category.split(' ')[0] || '📝'; 
+                    const name = item.category.substring(icon.length).trim() || item.category;
+                    const dateLabel = specificDate === null ? `<span style="font-size:11px; color:var(--text-sub); margin-left:6px; background:var(--nav-btn-bg); padding:2px 6px; border-radius:6px;">${item.date.split('-').slice(1).join('/')}</span>` : '';
+                    const diaryHtml = item.diary ? `<span class="item-diary" style="font-size:11px; color:var(--text-sub); margin-top:2px;">${item.diary}</span>` : '';
+                    const amtColor = item.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)';
+                    const amtSign = item.type === 'income' ? '+' : '-';
+
+                    html += `
+                        <div class="history-item" onclick="openRecordModal(${item.id})">
+                            <div class="item-left">
+                                <div class="item-icon" style="width:30px; height:30px; font-size:14px;">${icon}</div>
+                                <div class="item-info">
+                                    <div style="display:flex; align-items:center;">
+                                        <span class="item-category" style="font-size:13px;">${name}</span>
+                                        ${dateLabel}
+                                    </div>
+                                    ${diaryHtml}
+                                </div>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="font-weight:bold; font-size:14px; color:${amtColor}">
+                                    ${amtSign}$${item.amount.toLocaleString()}
+                                </span>
+                                <button class="list-action-delete-btn" style="min-height:28px; padding:4px 8px;" onclick="event.stopPropagation(); openDeleteModal(${item.id})">刪除</button>
+                            </div>
+                        </div>`;
+                });
+                html += `</div>`;
+            });
+            return html;
+        }
+
+        // 🔥 聯動滑動車廂產生器 🔥
+        function createGhostCal(y, m, isPrev, specificDateStr = null) {
+            const ghost = document.createElement('div');
+            ghost.className = 'calendar-page ghost-page ' + (isPrev ? 'prev' : 'next');
+            ghost.style.position = 'absolute';
+            ghost.style.top = '0';
+            ghost.style.width = '100vw';
+            ghost.style.height = '100%';
+            ghost.style.display = 'flex';
+            ghost.style.flexDirection = 'column';
+            ghost.style.left = isPrev ? '-100vw' : '100vw'; // 確保於螢幕外最邊緣
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'calendar-grid-wrapper';
+            wrapper.style.overflow = 'hidden';
+            wrapper.style.flexShrink = '0';
+            wrapper.style.paddingBottom = '24px'; // 預留黃色底色距離
+            
+            const grid = document.createElement('div');
+            grid.className = 'calendar-grid';
+            grid.innerHTML = generateCalendarHTML(y, m);
+            wrapper.appendChild(grid);
+            
+            const recordsWrapper = document.createElement('div');
+            recordsWrapper.style.flex = '1';
+            recordsWrapper.style.overflowY = 'auto';
+            recordsWrapper.style.padding = '0 28px calc(60px + env(safe-area-inset-bottom)) 28px';
+            recordsWrapper.innerHTML = getRecordsHTML(y, m, specificDateStr);
+            
+            ghost.appendChild(wrapper);
+            ghost.appendChild(recordsWrapper);
+            return ghost;
+        }
+
         function initCalendarSwipe() {
             const swipeArea = document.getElementById('cal-swipe-viewport');
             const swipeTarget = document.getElementById('cal-swipe-track');
             let touchStartX = 0; let touchStartY = 0; let currentTouchX = 0; let isSwiping = false; let hasAddedGhosts = false;
-            let baseViewportHeight = 0;
-            let targetViewportHeight = 0;
 
             swipeArea.addEventListener('touchstart', (e) => {
                 if (e.touches.length > 1) return;
                 touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
                 currentTouchX = touchStartX; isSwiping = true; hasAddedGhosts = false;
                 swipeTarget.style.transition = 'none';
-                document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
-                
-                // 鎖定高度準備動畫
-                baseViewportHeight = swipeArea.offsetHeight;
-                swipeArea.style.transition = 'none';
-                swipeArea.style.height = baseViewportHeight + 'px';
+                document.querySelectorAll('.ghost-page').forEach(el => el.remove());
             }, {passive: true});
 
             swipeArea.addEventListener('touchmove', (e) => {
                 if (!isSwiping) return;
                 currentTouchX = e.touches[0].clientX; let deltaX = currentTouchX - touchStartX; let deltaY = e.touches[0].clientY - touchStartY;
                 
-                // 🔥 防 iOS 邊緣回彈
+                // 防 iOS 原生邊緣回彈
                 if (Math.abs(deltaX) > Math.abs(deltaY) && e.cancelable) {
                     e.preventDefault();
                 }
@@ -1075,26 +1178,12 @@
                 if (!hasAddedGhosts && Math.abs(deltaX) > 5) {
                     hasAddedGhosts = true;
                     let pY = displayYear; let pM = displayMonth - 1; if (pM < 0) { pM = 11; pY--; }
-                    swipeTarget.appendChild(createGhostCal(pY, pM, true));
+                    swipeTarget.appendChild(createGhostCal(pY, pM, true, null));
                     let nY = displayYear; let nM = displayMonth + 1; if (nM > 11) { nM = 0; nY++; }
-                    swipeTarget.appendChild(createGhostCal(nY, nM, false));
+                    swipeTarget.appendChild(createGhostCal(nY, nM, false, null));
                 }
                 
-                if (hasAddedGhosts) {
-                    const ghost = deltaX < 0 ? document.querySelector('.ghost-cal.next') : document.querySelector('.ghost-cal.prev');
-                    if (ghost) {
-                        const currentGridHeight = document.getElementById('calendar-grid-container').offsetHeight;
-                        const heightDiff = ghost.offsetHeight - currentGridHeight;
-                        targetViewportHeight = baseViewportHeight + heightDiff;
-                        
-                        let dragRatio = Math.abs(deltaX) / swipeArea.offsetWidth;
-                        if (dragRatio > 1) dragRatio = 1;
-                        // 精準計算，完美平滑推下
-                        swipeArea.style.height = (baseViewportHeight + heightDiff * dragRatio) + 'px';
-                    }
-                }
-                
-                // 完美修正飛過龍：防止超出版面
+                // 動態同滑動車廂
                 swipeTarget.style.transform = `translateX(${deltaX}px)`;
             }, {passive: false});
 
@@ -1105,102 +1194,24 @@
                 if (deltaX > threshold) { direction = -1; } else if (deltaX < -threshold) { direction = 1; }
                 
                 if (direction !== 0) {
-                    // 完美對齊 track 寬度，絕無飛過龍回彈
-                    const trackWidth = swipeTarget.offsetWidth;
+                    const trackWidth = swipeArea.offsetWidth;
                     let targetTransformX = direction === 1 ? -trackWidth : trackWidth;
                     
                     swipeTarget.style.transition = 'transform 0.3s ease-out';
                     swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
                     
-                    swipeArea.style.transition = 'height 0.3s ease-out';
-                    swipeArea.style.height = targetViewportHeight + 'px';
-                    
                     setTimeout(() => {
                         swipeTarget.style.transition = 'none';
                         swipeTarget.style.transform = `translateX(0)`;
-                        swipeArea.style.transition = 'none';
-                        swipeArea.style.height = 'auto';
-                        document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
-                        adjustCalendarMonth(direction, false); // 動畫已完成，不需再執行動畫
+                        document.querySelectorAll('.ghost-page').forEach(el => el.remove());
+                        adjustCalendarMonth(direction, false); 
                     }, 300);
                 } else {
                     swipeTarget.style.transition = 'transform 0.3s ease-out';
                     swipeTarget.style.transform = `translateX(0)`;
-                    swipeArea.style.transition = 'height 0.3s ease-out';
-                    swipeArea.style.height = baseViewportHeight + 'px';
-                    setTimeout(() => { 
-                        swipeArea.style.transition = 'none';
-                        swipeArea.style.height = 'auto';
-                        document.querySelectorAll('.ghost-cal').forEach(el => el.remove()); 
-                    }, 300);
+                    setTimeout(() => { document.querySelectorAll('.ghost-page').forEach(el => el.remove()); }, 300);
                 }
             });
-        }
-
-        function createGhostCal(y, m, isPrev) {
-            const ghost = document.createElement('div');
-            ghost.className = 'calendar-grid ghost-cal ' + (isPrev ? 'prev' : 'next');
-            ghost.style.position = 'absolute'; ghost.style.top = '0'; ghost.style.width = '100%';
-            ghost.style.left = isPrev ? '-100vw' : '100vw'; // Absolute offset by screen width
-            ghost.innerHTML = generateCalendarHTML(y, m);
-            return ghost;
-        }
-
-        function updateDashboard(isSwipe = false) {
-            let totalIncome = 0; let totalExpense = 0; const prefix = `${currentSelectedYear}-${(currentSelectedMonth + 1).toString().padStart(2, '0')}`;
-            records.forEach(r => { if (r.date.startsWith(prefix)) { if (r.type === 'income') totalIncome += r.amount; else totalExpense += r.amount; } });
-            globalTotalIncome = totalIncome;
-            const currentBalance = totalIncome - totalExpense; document.getElementById('total-balance').innerText = `$${currentBalance.toLocaleString()}`;
-            
-            if (chartAnimationFrameId) cancelAnimationFrame(chartAnimationFrameId); 
-            
-            if (!isSwipe && totalIncome === prevChartInc && totalExpense === prevChartExp && animationProgress >= 1) return;
-            prevChartInc = totalIncome; prevChartExp = totalExpense;
-
-            if (isSwipe) {
-                animationProgress = 1;
-                drawSplitDonutChart(totalIncome, totalExpense, 1);
-            } else {
-                animationProgress = 0; 
-                animateDonutChart(totalIncome, totalExpense);
-            }
-        }
-
-        function animateDonutChart(income, expense) {
-            animationProgress += 0.03; if (animationProgress > 1) animationProgress = 1;
-            drawSplitDonutChart(income, expense, animationProgress);
-            if (animationProgress < 1) { chartAnimationFrameId = requestAnimationFrame(() => animateDonutChart(income, expense)); }
-        }
-
-        function drawSplitDonutChart(income, expense, progress) {
-            const canvas = document.getElementById('pieChart'); const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const centerX = canvas.width / 2; const centerY = canvas.height / 2; const outerRadius = (canvas.width / 2) - 18; const innerRadius = 135; 
-            const strokeStyleColor = getComputedStyle(document.documentElement).getPropertyValue('--black-stroke').trim() || '#222222';
-            if (income === 0 && expense === 0) {
-                ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI, true);
-                ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI); ctx.stroke();
-                ctx.beginPath(); ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI); ctx.stroke(); ctx.restore(); return;
-            }
-
-            const totalSum = income + expense; const expenseShare = expense / totalSum; const incomeShare = income / totalSum;
-            const totalAvailableAngle = (2 * Math.PI) * progress; const expenseAngleLength = totalAvailableAngle * expenseShare;
-            const incomeAngleLength = totalAvailableAngle * incomeShare; const startOrigin = -Math.PI * 0.5; 
-            let expStart = startOrigin; let expEnd = expStart + expenseAngleLength; let incStart = expEnd; let incEnd = incStart + incomeAngleLength;
-
-            const drawSegment = (sAngle, eAngle, faceColor) => {
-                let actualGap = (income > 0 && expense > 0) ? (9 * progress) : 0;
-                const maxAllowedGapOut = Math.min(expenseAngleLength, incomeAngleLength) * outerRadius * 0.45;
-                if (actualGap > maxAllowedGapOut) actualGap = maxAllowedGapOut; const halfGap = actualGap; 
-                let outA1 = sAngle + Math.asin(halfGap / outerRadius); let outA2 = eAngle - Math.asin(halfGap / outerRadius);
-                let inA1 = sAngle + Math.asin(halfGap / innerRadius); let inA2 = eAngle - Math.asin(halfGap / innerRadius);
-
-                if (outA2 < outA1) { let m = (sAngle+eAngle)/2; outA1 = m; outA2 = m; } if (inA2 < inA1) { let m = (sAngle+eAngle)/2; inA1 = m; inA2 = m; }
-                ctx.save(); ctx.beginPath(); ctx.arc(centerX, centerY, outerRadius, outA1, outA2); ctx.arc(centerX, centerY, innerRadius, inA2, inA1, true); ctx.closePath();
-                ctx.save(); ctx.shadowColor = 'rgba(0, 0, 0, 0.08)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 6; ctx.fillStyle = faceColor; ctx.fill(); ctx.restore();
-                ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
-            };
-            if (expense > 0) drawSegment(expStart, expEnd, '#f7a3b6');
-            if (income > 0) drawSegment(incStart, incEnd, '#4ab3e3'); 
         }
 
         function initCoinLoop() {
@@ -1285,15 +1296,59 @@
             renderGridCalendar(false); 
             renderModalDateRecords(); 
         }
+        
         function closeCalendarModal(e) { if (e === null || e.target === document.getElementById('calendarModal')) document.getElementById('calendarModal').classList.remove('active'); }
         
-        function adjustCalendarMonth(delta, animateHeight = true) { 
-            displayMonth += delta; 
-            if (displayMonth < 0) { displayMonth = 11; displayYear--; } 
-            if (displayMonth > 11) { displayMonth = 0; displayYear++; } 
-            
-            renderGridCalendar(animateHeight); 
-            renderModalDateRecords();
+        // 🔥 智能跨月與滑動連動 🔥
+        function adjustCalendarMonth(delta, triggerSlide = false, specificDateStr = null) { 
+            const targetY = displayMonth + delta < 0 ? displayYear - 1 : (displayMonth + delta > 11 ? displayYear + 1 : displayYear);
+            const targetM = displayMonth + delta < 0 ? 11 : (displayMonth + delta > 11 ? 0 : displayMonth + delta);
+
+            if (triggerSlide) {
+                const swipeTarget = document.getElementById('cal-swipe-track');
+                const isPrev = delta < 0;
+                
+                swipeTarget.appendChild(createGhostCal(targetY, targetM, isPrev, specificDateStr));
+                swipeTarget.offsetWidth; // force reflow
+                
+                const trackWidth = swipeTarget.offsetWidth;
+                let targetTransformX = isPrev ? trackWidth : -trackWidth;
+                
+                swipeTarget.style.transition = 'transform 0.3s ease-out';
+                swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
+                
+                setTimeout(() => {
+                    displayMonth = targetM;
+                    displayYear = targetY;
+                    if (specificDateStr) {
+                        showMonthRecords = false;
+                        selectedDateStr = specificDateStr;
+                    } else {
+                        showMonthRecords = true; 
+                    }
+                    
+                    swipeTarget.style.transition = 'none';
+                    swipeTarget.style.transform = `translateX(0)`;
+                    document.querySelectorAll('.ghost-page').forEach(el => el.remove());
+                    
+                    document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
+                    document.getElementById('calendar-grid-container').innerHTML = generateCalendarHTML(displayYear, displayMonth);
+                    renderModalDateRecords();
+                }, 300);
+            } else {
+                displayMonth = targetM;
+                displayYear = targetY;
+                if (specificDateStr) {
+                    showMonthRecords = false;
+                    selectedDateStr = specificDateStr;
+                } else {
+                    showMonthRecords = true; 
+                }
+                
+                document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
+                document.getElementById('calendar-grid-container').innerHTML = generateCalendarHTML(displayYear, displayMonth);
+                renderModalDateRecords();
+            }
         }
 
         function generateCalendarHTML(year, month) {
@@ -1325,31 +1380,30 @@
             return `<div class="${cls}" data-date="${cellDateStr}">${day}${dot}</div>`;
         }
 
-        // 🔥 完美高度動畫計算器：精準測量包含 padding 嘅整個 viewport，平滑伸縮日曆 🔥
         function renderGridCalendar(animateHeight = true) {
-            const viewport = document.getElementById('cal-swipe-viewport');
+            const wrapper = document.getElementById('calendar-grid-wrapper');
             const gridContainer = document.getElementById('calendar-grid-container');
             
             if (animateHeight) {
-                const startHeight = viewport.offsetHeight;
-                viewport.style.height = startHeight + 'px';
+                const startHeight = wrapper.offsetHeight;
+                wrapper.style.height = startHeight + 'px';
                 
                 document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
                 gridContainer.innerHTML = generateCalendarHTML(displayYear, displayMonth);
                 
-                viewport.style.transition = 'none';
-                viewport.style.height = 'auto';
-                const endHeight = viewport.offsetHeight; // 正確獲取包含 padding 嘅新高度
+                wrapper.style.transition = 'none';
+                wrapper.style.height = 'auto';
+                const endHeight = wrapper.offsetHeight;
                 
-                viewport.style.height = startHeight + 'px';
-                viewport.offsetHeight; // 強制重繪
+                wrapper.style.height = startHeight + 'px';
+                wrapper.offsetHeight; // force reflow
                 
-                viewport.style.transition = 'height 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
-                viewport.style.height = endHeight + 'px';
+                wrapper.style.transition = 'height 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                wrapper.style.height = endHeight + 'px';
                 
                 setTimeout(() => {
-                    viewport.style.transition = 'none';
-                    viewport.style.height = 'auto'; // 動畫完成後解鎖
+                    wrapper.style.transition = 'none';
+                    wrapper.style.height = 'auto'; 
                 }, 300);
             } else {
                 document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
@@ -1357,61 +1411,9 @@
             }
         }
 
-        // 🔥 日曆明細區：採用同主頁完全一樣嘅卡片分組群組設計，移除礙眼選定文字 🔥
         function renderModalDateRecords() {
-            const container = document.getElementById('modal-date-records'); container.innerHTML = '';
-            
-            let targetRecords = [];
-            if (showMonthRecords) {
-                const prefix = `${displayYear}-${(displayMonth + 1).toString().padStart(2, '0')}`;
-                targetRecords = records.filter(r => r.date.startsWith(prefix));
-            } else {
-                targetRecords = records.filter(r => r.date === selectedDateStr);
-            }
-
-            if (targetRecords.length === 0) { 
-                container.innerHTML = `<div style="text-align:center; padding:24px 16px; font-size:14px; font-weight:bold; color:var(--text-sub);">📍 該${showMonthRecords ? '月份' : '日'}尚無收支明細</div>`; 
-                return; 
-            }
-
-            const groupedRecords = {}; 
-            targetRecords.forEach(r => { if (!groupedRecords[r.date]) groupedRecords[r.date] = []; groupedRecords[r.date].push(r); });
-
-            Object.keys(groupedRecords).sort((a, b) => new Date(b) - new Date(a)).forEach(dateStr => {
-                const dayRecords = groupedRecords[dateStr]; 
-                const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']; 
-                const dayOfWeekStr = weekDays[new Date(dateStr).getDay()];
-                
-                const dateGroupDiv = document.createElement('div'); dateGroupDiv.className = 'date-group';
-                let daySum = 0; dayRecords.forEach(dr => { daySum += dr.amount; });
-                
-                const headerDiv = document.createElement('div'); headerDiv.className = 'date-header'; 
-                headerDiv.innerHTML = `<span>${dateStr.replace(/-/g, '/')} ${dayOfWeekStr}</span><span class="date-summary-total">$${daySum.toLocaleString()}</span>`; 
-                dateGroupDiv.appendChild(headerDiv);
-
-                dayRecords.forEach(item => {
-                    const itemDiv = document.createElement('div'); itemDiv.className = 'history-item'; itemDiv.onclick = () => openRecordModal(item.id);
-                    const icon = item.category.split(' ')[0] || '📝'; const name = item.category.substring(icon.length).trim() || item.category;
-                    
-                    itemDiv.innerHTML = `
-                        <div class="item-left">
-                            <div class="item-icon" style="width:30px; height:30px; font-size:14px;">${icon}</div>
-                            <div class="item-info">
-                                <span class="item-category" style="font-size:13px;">${name}</span>
-                                ${item.diary ? `<span class="item-diary" style="font-size:11px; color:var(--text-sub); margin-top:2px;">${item.diary}</span>` : ''}
-                            </div>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <span style="font-weight:bold; font-size:14px; color:${item.type==='income'?'var(--income-color)':'var(--expense-color)'}">
-                                ${item.type==='income'?'+':'-'}$${item.amount.toLocaleString()}
-                            </span>
-                            <button class="list-action-delete-btn" style="min-height:28px; padding:4px 8px;" onclick="event.stopPropagation(); openDeleteModal(${item.id})">刪除</button>
-                        </div>
-                    `;
-                    dateGroupDiv.appendChild(itemDiv);
-                });
-                container.appendChild(dateGroupDiv);
-            });
+            const container = document.getElementById('modal-date-records');
+            container.innerHTML = getRecordsHTML(displayYear, displayMonth, showMonthRecords ? null : selectedDateStr);
         }
 
         function executeAdd(amount, category, date, diary, forcedType) {
