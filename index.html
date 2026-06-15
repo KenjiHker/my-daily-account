@@ -16,8 +16,8 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：版本 1.0.1 (UI美化升級版)
-        const APP_VERSION = "1.0.1"; 
+        // 🌟 自動版本檢查機制：版本 1.0.2 (日曆模塊優化連動版)
+        const APP_VERSION = "1.0.2"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
             if (savedVersion !== APP_VERSION) {
@@ -195,10 +195,16 @@
         .action-cancel-block-btn { flex: 1; height: 50px; background: var(--nav-btn-bg); color: var(--text-main); border: 2.5px solid #222222; border-radius: var(--radius-sub); font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 #222222; }
         [data-theme="dark"] .action-cancel-block-btn { border-color: #ffffff; box-shadow: 0 4px 0 #ffffff; }
 
-        /* 🔥 日曆底色更換為首頁底色 🔥 */
-        .calendar-sheet { height: 100dvh !important; max-height: 100dvh !important; border-radius: 0 !important; display: flex; flex-direction: column; border-top: none !important; background: var(--bg-color) !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: 0 !important; overflow: hidden !important; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1) !important; will-change: transform; }
+        /* 🔥 日曆底色更換為首頁底色，並移除水平 padding 讓滑動可以滿版 🔥 */
+        .calendar-sheet { height: 100dvh !important; max-height: 100dvh !important; border-radius: 0 !important; display: flex; flex-direction: column; border-top: none !important; background: var(--bg-color) !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-left: 0 !important; padding-right: 0 !important; padding-bottom: 0 !important; overflow: hidden !important; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1) !important; will-change: transform; }
+        .calendar-sheet .modal-header { padding: 0 20px; margin-bottom: 8px; }
         
-        #modal-date-records { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(60px + env(safe-area-inset-bottom)); padding-left: 16px; padding-right: 16px; }
+        #cal-swipe-viewport { position: relative; width: 100vw; flex: 1; overflow: hidden; }
+        #cal-swipe-track { position: relative; width: 100%; height: 100%; will-change: transform; display: flex; }
+        .cal-page { width: 100vw; flex-shrink: 0; display: flex; flex-direction: column; padding: 0 20px; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
+        
+        #calendar-grid-container { flex-shrink: 0; }
+        #modal-date-records { flex-shrink: 0; margin-top: 16px; padding-bottom: 20px; }
         
         /* 🔥 日曆美化：計數機按鈕風格 🔥 */
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; gap: 8px; text-align: center; padding: 12px 8px; background: transparent; border: none; box-sizing: border-box; }
@@ -265,7 +271,6 @@
         .handdrawn-font-svg { width: 100%; height: 100%; display: block; }
         .handdrawn-font-svg path { fill: none; stroke: var(--calc-text); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
 
-        /* 🔥 新增修改數據版面：頂部白色更換為首頁底色顏色 🔥 */
         .full-screen-modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: var(--bg-color); z-index: 3000; display: none; flex-direction: column; overflow: hidden; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: transform; }
         .full-screen-modal.active { display: flex; }
         .record-header-bar { display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 12px; background: var(--bg-color); border-bottom: none; font-size: 18px; font-weight: bold; color: var(--text-main); z-index: 10; }
@@ -406,14 +411,14 @@
                 </button>
             </div>
             
-            <div id="cal-swipe-viewport" style="position: relative; width: 100%; overflow: hidden; margin-bottom: 16px; touch-action: pan-y;">
-                <div id="cal-swipe-track" style="position: relative; width: 100%; will-change: transform; display: flex;">
-                    <div class="calendar-grid" id="calendar-grid-container" style="width: 100%; flex-shrink: 0;"></div>
+            <div id="cal-swipe-viewport">
+                <div id="cal-swipe-track">
+                    <div class="cal-page" id="cal-main-page">
+                        <div class="calendar-grid" id="calendar-grid-container"></div>
+                        <div id="modal-date-records"></div>
+                    </div>
                 </div>
             </div>
-
-            <div style="font-size: 14px; font-weight: 800; margin-bottom: 8px; color:var(--text-main);" id="selected-date-label">📍 選定日期</div>
-            <div id="modal-date-records"></div>
         </div>
     </div>
 
@@ -1027,63 +1032,135 @@
             }
         }
 
+        // 🔥 生成卡片式群組列表 HTML (提供首頁與日曆共用) 🔥
+        function generateGroupedRecordsHTML(targetRecords) {
+            if (targetRecords.length === 0) return ''; // 沒有紀錄時直接回傳空字串 (移除尚無明細提示)
+            let html = '';
+            const groupedRecords = {}; 
+            targetRecords.forEach(r => { if (!groupedRecords[r.date]) groupedRecords[r.date] = []; groupedRecords[r.date].push(r); });
+
+            Object.keys(groupedRecords).sort((a, b) => new Date(b) - new Date(a)).forEach(dateStr => {
+                const dayRecords = groupedRecords[dateStr]; 
+                const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']; 
+                const dayOfWeekStr = weekDays[new Date(dateStr).getDay()];
+                
+                let daySum = 0; dayRecords.forEach(dr => { daySum += dr.amount; });
+                
+                html += `<div class="date-group"><div class="date-header"><span>${dateStr.replace(/-/g, '/')} ${dayOfWeekStr}</span><span class="date-summary-total">$${daySum.toLocaleString()}</span></div>`;
+
+                dayRecords.forEach(item => {
+                    const icon = item.category.split(' ')[0] || '📝'; 
+                    const name = item.category.substring(icon.length).trim() || item.category;
+                    html += `
+                        <div class="history-item" onclick="openRecordModal(${item.id})">
+                            <div class="item-left">
+                                <div class="item-icon">${icon}</div>
+                                <div class="item-info">
+                                    <span class="item-category">${name}</span>
+                                    ${item.diary ? `<span class="item-diary">${item.diary}</span>` : ''}
+                                </div>
+                            </div>
+                            <div class="item-right-action-wrapper">
+                                <div class="item-amount-box">
+                                    <span class="item-amount" style="color: ${item.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)'}">${item.type === 'income' ? '+' : '-'}$${item.amount.toLocaleString()}</span>
+                                </div>
+                                <button class="list-action-delete-btn" onclick="event.stopPropagation(); openDeleteModal(${item.id})">刪除</button>
+                            </div>
+                        </div>`;
+                });
+                html += `</div>`;
+            });
+            return html;
+        }
+
+        function createGhostPage(y, m, isPrev) {
+            const ghost = document.createElement('div');
+            ghost.className = 'cal-page ghost-page';
+            ghost.style.position = 'absolute'; 
+            ghost.style.top = '0'; 
+            ghost.style.left = isPrev ? '-100vw' : '100vw';
+            
+            const grid = document.createElement('div');
+            grid.className = 'calendar-grid';
+            grid.id = 'calendar-grid-container';
+            grid.innerHTML = generateCalendarHTML(y, m);
+            
+            const recordsContainer = document.createElement('div');
+            recordsContainer.id = 'modal-date-records';
+            
+            // 抓取並渲染該月份資料
+            const prefix = `${y}-${(m + 1).toString().padStart(2, '0')}`;
+            const targetRecords = records.filter(r => r.date.startsWith(prefix)).sort((a, b) => {
+                if (a.date !== b.date) return new Date(b.date) - new Date(a.date);
+                return b.id - a.id;
+            });
+            recordsContainer.innerHTML = generateGroupedRecordsHTML(targetRecords);
+
+            ghost.appendChild(grid);
+            ghost.appendChild(recordsContainer);
+            return ghost;
+        }
+
         function initCalendarSwipe() {
             const swipeArea = document.getElementById('cal-swipe-viewport');
             const swipeTarget = document.getElementById('cal-swipe-track');
             let touchStartX = 0; let currentTouchX = 0; let isSwiping = false; let hasAddedGhosts = false;
 
-            swipeArea.addEventListener('touchstart', (e) => {
+            swipeArea.addEventListener('touchstart', function(e) {
                 if (e.touches.length > 1) return;
-                touchStartX = e.touches[0].clientX; currentTouchX = touchStartX; isSwiping = true; hasAddedGhosts = false;
+                touchStartX = e.touches[0].clientX; currentTouchX = touchStartX; 
+                this.touchStartY = e.touches[0].clientY;
+                this.isScrolling = undefined;
+                isSwiping = true; hasAddedGhosts = false;
                 swipeTarget.style.transition = 'none';
-                document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
+                document.querySelectorAll('.ghost-page').forEach(el => el.remove());
             }, {passive: true});
 
-            swipeArea.addEventListener('touchmove', (e) => {
+            swipeArea.addEventListener('touchmove', function(e) {
                 if (!isSwiping) return;
-                currentTouchX = e.touches[0].clientX; let deltaX = currentTouchX - touchStartX;
-                
+                currentTouchX = e.touches[0].clientX; 
+                let currentTouchY = e.touches[0].clientY;
+                let deltaX = currentTouchX - touchStartX;
+                let deltaY = currentTouchY - this.touchStartY;
+
+                // 判斷是否為垂直滾動
+                if (typeof this.isScrolling === 'undefined') {
+                    this.isScrolling = Math.abs(deltaY) > Math.abs(deltaX);
+                }
+                if (this.isScrolling) return; // 垂直滾動時交給瀏覽器處理，不觸發水平滑動
+
                 if (!hasAddedGhosts && Math.abs(deltaX) > 5) {
                     hasAddedGhosts = true;
                     let pY = displayYear; let pM = displayMonth - 1; if (pM < 0) { pM = 11; pY--; }
-                    swipeTarget.appendChild(createGhostCal(pY, pM, true));
+                    swipeTarget.appendChild(createGhostPage(pY, pM, true));
                     let nY = displayYear; let nM = displayMonth + 1; if (nM > 11) { nM = 0; nY++; }
-                    swipeTarget.appendChild(createGhostCal(nY, nM, false));
+                    swipeTarget.appendChild(createGhostPage(nY, nM, false));
                 }
                 swipeTarget.style.transform = `translateX(${deltaX}px)`;
             }, {passive: true});
 
-            swipeArea.addEventListener('touchend', (e) => {
-                if (!isSwiping) return;
-                isSwiping = false; let deltaX = currentTouchX - touchStartX; const threshold = swipeArea.offsetWidth * 0.2;
+            swipeArea.addEventListener('touchend', function(e) {
+                if (!isSwiping || this.isScrolling) return;
+                isSwiping = false; let deltaX = currentTouchX - touchStartX; const threshold = window.innerWidth * 0.2;
                 let direction = 0;
                 if (deltaX > threshold) { direction = -1; } else if (deltaX < -threshold) { direction = 1; }
                 
                 if (direction !== 0) {
-                    let targetTransformX = direction === 1 ? -(swipeArea.offsetWidth + 20) : (swipeArea.offsetWidth + 20);
+                    let targetTransformX = direction === 1 ? -window.innerWidth : window.innerWidth;
                     swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)';
                     swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
                     setTimeout(() => {
                         swipeTarget.style.transition = 'none';
                         swipeTarget.style.transform = `translateX(0)`;
-                        document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
+                        document.querySelectorAll('.ghost-page').forEach(el => el.remove());
                         adjustCalendarMonth(direction);
                     }, 500);
                 } else {
                     swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)';
                     swipeTarget.style.transform = `translateX(0)`;
-                    setTimeout(() => { document.querySelectorAll('.ghost-cal').forEach(el => el.remove()); }, 500);
+                    setTimeout(() => { document.querySelectorAll('.ghost-page').forEach(el => el.remove()); }, 500);
                 }
             });
-        }
-
-        function createGhostCal(y, m, isPrev) {
-            const ghost = document.createElement('div');
-            ghost.className = 'calendar-grid ghost-cal';
-            ghost.style.position = 'absolute'; ghost.style.top = '0'; ghost.style.width = '100%';
-            ghost.style.left = isPrev ? 'calc(-100% - 20px)' : 'calc(100% + 20px)';
-            ghost.innerHTML = generateCalendarHTML(y, m);
-            return ghost;
         }
 
         function updateDashboard(isSwipe = false) {
@@ -1218,6 +1295,12 @@
                 if (window.saveData) window.saveData(records);
                 closeDeleteModal(); closeRecordModal();
                 syncHeaderDisplay();
+                
+                // 如果日曆開啟中，同步更新日曆內的資料
+                if (document.getElementById('calendarModal').classList.contains('active')) {
+                    renderGridCalendar();
+                    renderModalDateRecords();
+                }
             }
         }
 
@@ -1274,25 +1357,19 @@
         function renderGridCalendar() {
             document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
             const gridContainer = document.getElementById('calendar-grid-container');
-            gridContainer.innerHTML = generateCalendarHTML(displayYear, displayMonth);
+            if (gridContainer) gridContainer.innerHTML = generateCalendarHTML(displayYear, displayMonth);
         }
 
         function renderModalDateRecords() {
-            const container = document.getElementById('modal-date-records'); container.innerHTML = '';
+            const container = document.getElementById('modal-date-records'); 
+            if (!container) return;
             
             let targetRecords = [];
             if (showMonthRecords) {
-                document.getElementById('selected-date-label').innerText = `📍 ${displayYear}年${displayMonth + 1}月 明細`;
                 const prefix = `${displayYear}-${(displayMonth + 1).toString().padStart(2, '0')}`;
                 targetRecords = records.filter(r => r.date.startsWith(prefix));
             } else {
-                document.getElementById('selected-date-label').innerText = `📍 選定日期：${selectedDateStr}`;
                 targetRecords = records.filter(r => r.date === selectedDateStr);
-            }
-
-            if (targetRecords.length === 0) { 
-                container.innerHTML = `<div style="text-align:center; padding:18px; font-size:13px; color:#bbb;">📍 該${showMonthRecords ? '月份' : '日'}尚無收支明細</div>`; 
-                return; 
             }
 
             targetRecords.sort((a, b) => {
@@ -1300,33 +1377,8 @@
                 return b.id - a.id;
             });
 
-            targetRecords.forEach(item => {
-                const itemDiv = document.createElement('div'); itemDiv.className = 'history-item'; itemDiv.style.cssText = 'border: 1.5px solid #222; border-radius:12px; margin-bottom:8px; box-shadow:0 3px 0 #222;';
-                itemDiv.onclick = () => openRecordModal(item.id);
-                const icon = item.category.split(' ')[0] || '📝'; const name = item.category.substring(icon.length).trim() || item.category;
-                
-                const dateLabel = showMonthRecords ? `<span style="font-size:11px; color:var(--text-sub); margin-left:6px; background:var(--nav-btn-bg); padding:2px 6px; border-radius:6px;">${item.date.split('-').slice(1).join('/')}</span>` : '';
-
-                itemDiv.innerHTML = `
-                    <div class="item-left">
-                        <div class="item-icon" style="width:30px; height:30px; font-size:14px;">${icon}</div>
-                        <div class="item-info">
-                            <div style="display:flex; align-items:center;">
-                                <span class="item-category" style="font-size:13px;">${name}</span>
-                                ${dateLabel}
-                            </div>
-                            ${item.diary ? `<span class="item-diary" style="font-size:11px; color:var(--text-sub); margin-top:2px;">${item.diary}</span>` : ''}
-                        </div>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <span style="font-weight:bold; font-size:14px; color:${item.type==='income'?'var(--income-color)':'var(--expense-color)'}">
-                            ${item.type==='income'?'+':'-'}$${item.amount.toLocaleString()}
-                        </span>
-                        <button class="list-action-delete-btn" style="min-height:28px; padding:4px 8px;" onclick="event.stopPropagation(); openDeleteModal(${item.id})">刪除</button>
-                    </div>
-                `;
-                container.appendChild(itemDiv);
-            });
+            // 呼叫統一的渲染函式生成群組卡片，取代舊版單獨羅列
+            container.innerHTML = generateGroupedRecordsHTML(targetRecords);
         }
 
         function executeAdd(amount, category, date, diary, forcedType) {
@@ -1338,6 +1390,11 @@
             const recordDate = new Date(date); currentSelectedYear = recordDate.getFullYear(); currentSelectedMonth = recordDate.getMonth();
             viewMode = 'month';
             syncHeaderDisplay();
+            
+            if (document.getElementById('calendarModal').classList.contains('active')) {
+                renderGridCalendar();
+                renderModalDateRecords();
+            }
         }
 
         function openMonthModal() { document.getElementById('monthModal').classList.add('active'); renderMonthButtonsGrid(); }
@@ -1570,6 +1627,11 @@
                         if (window.saveData) window.saveData(records);
                         currentSelectedYear = year; currentSelectedMonth = recordState.date.getMonth(); viewMode = 'month';
                         syncHeaderDisplay();
+                        
+                        if (document.getElementById('calendarModal').classList.contains('active')) {
+                            renderGridCalendar();
+                            renderModalDateRecords();
+                        }
                     }
                 }
                 closeRecordModal();
@@ -1589,25 +1651,8 @@
                 listContainer.innerHTML = `<div class="empty-state-wrapper"><div class="empty-text-main">沒有記錄</div><div class="empty-text-sub" style="font-size:13px; color:#aaa; margin-top:2px;">點擊 ＋ 號新增一筆</div></div>`; return;
             }
 
-            const groupedRecords = {}; filteredRecords.forEach(r => { if (!groupedRecords[r.date]) groupedRecords[r.date] = []; groupedRecords[r.date].push(r); });
-
-            Object.keys(groupedRecords).sort((a, b) => new Date(b) - new Date(a)).forEach(dateStr => {
-                const dayRecords = groupedRecords[dateStr]; const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']; const dayOfWeekStr = weekDays[new Date(dateStr).getDay()];
-                const dateGroupDiv = document.createElement('div'); dateGroupDiv.className = 'date-group';
-                let daySum = 0; dayRecords.forEach(dr => { daySum += dr.amount; });
-                const headerDiv = document.createElement('div'); headerDiv.className = 'date-header'; headerDiv.innerHTML = `<span>${dateStr.replace(/-/g, '/')} ${dayOfWeekStr}</span><span class="date-summary-total">$${daySum.toLocaleString()}</span>`; dateGroupDiv.appendChild(headerDiv);
-
-                dayRecords.forEach(item => {
-                    const itemDiv = document.createElement('div'); itemDiv.className = 'history-item'; itemDiv.onclick = () => openRecordModal(item.id);
-                    const icon = item.category.split(' ')[0] || '📝'; const name = item.category.substring(icon.length).trim() || item.category;
-                    itemDiv.innerHTML = `
-                        <div class="item-left"><div class="item-icon">${icon}</div><div class="item-info"><span class="item-category">${name}</span>${item.diary ? `<span class="item-diary">${item.diary}</span>` : ''}</div></div>
-                        <div class="item-right-action-wrapper"><div class="item-amount-box"><span class="item-amount" style="color: ${item.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)'}">${item.type === 'income' ? '+' : '-'}$${item.amount.toLocaleString()}</span></div><button class="list-action-delete-btn" onclick="event.stopPropagation(); openDeleteModal(${item.id})">刪除</button></div>
-                    `;
-                    dateGroupDiv.appendChild(itemDiv);
-                });
-                listContainer.appendChild(dateGroupDiv);
-            });
+            // 直接呼叫共用的 HTML 生成器渲染群組紀錄
+            listContainer.innerHTML = generateGroupedRecordsHTML(filteredRecords);
         }
     </script>
 </body>
