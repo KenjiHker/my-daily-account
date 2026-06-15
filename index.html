@@ -16,8 +16,8 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：版本 1.0.2 (日曆模塊優化連動版)
-        const APP_VERSION = "1.0.2"; 
+        // 🌟 自動版本檢查機制：版本 1.0.3 (日曆獨立滾動與視覺去框版)
+        const APP_VERSION = "1.0.3"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
             if (savedVersion !== APP_VERSION) {
@@ -195,16 +195,17 @@
         .action-cancel-block-btn { flex: 1; height: 50px; background: var(--nav-btn-bg); color: var(--text-main); border: 2.5px solid #222222; border-radius: var(--radius-sub); font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 #222222; }
         [data-theme="dark"] .action-cancel-block-btn { border-color: #ffffff; box-shadow: 0 4px 0 #ffffff; }
 
-        /* 🔥 日曆底色更換為首頁底色，並移除水平 padding 讓滑動可以滿版 🔥 */
+        /* 🔥 日曆底色更換為首頁底色，調整排版讓數據獨立滾動 🔥 */
         .calendar-sheet { height: 100dvh !important; max-height: 100dvh !important; border-radius: 0 !important; display: flex; flex-direction: column; border-top: none !important; background: var(--bg-color) !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-left: 0 !important; padding-right: 0 !important; padding-bottom: 0 !important; overflow: hidden !important; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1) !important; will-change: transform; }
         .calendar-sheet .modal-header { padding: 0 20px; margin-bottom: 8px; }
         
-        #cal-swipe-viewport { position: relative; width: 100vw; flex: 1; overflow: hidden; }
+        #cal-swipe-viewport { position: relative; width: 100vw; flex: 1; overflow: hidden; display: flex; flex-direction: column; }
         #cal-swipe-track { position: relative; width: 100%; height: 100%; will-change: transform; display: flex; }
-        .cal-page { width: 100vw; flex-shrink: 0; display: flex; flex-direction: column; padding: 0 20px; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
         
-        #calendar-grid-container { flex-shrink: 0; }
-        #modal-date-records { flex-shrink: 0; margin-top: 16px; padding-bottom: 20px; }
+        /* 每個滑動頁面改為內部滾動設計 */
+        .cal-page { width: 100vw; flex-shrink: 0; display: flex; flex-direction: column; padding: 0; height: 100%; overflow: hidden; }
+        .calendar-grid-wrap { padding: 0 20px; flex-shrink: 0; }
+        .modal-date-records-wrap { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 20px; padding-bottom: calc(80px + env(safe-area-inset-bottom)); margin-top: 8px; }
         
         /* 🔥 日曆美化：計數機按鈕風格 🔥 */
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; gap: 8px; text-align: center; padding: 12px 8px; background: transparent; border: none; box-sizing: border-box; }
@@ -298,6 +299,10 @@
         #recordModal .calc-keyboard-grid { flex: 1; display: grid; grid-template-rows: repeat(4, minmax(0, 1fr)); grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 0 16px 12px 16px; min-height: 0; }
         #recordModal .calc-btn { height: 100%; min-height: 0; border-radius: 12px; box-shadow: 0 3px 0 var(--text-main); }
         #recordModal .calc-btn:active { transform: translateY(3px); box-shadow: 0 0px 0 var(--text-main); }
+        
+        /* 自定義無邊框按鈕 */
+        .cal-ctrl-btn { border: none; outline: none; background: transparent; font-size: 20px; color: var(--text-main); min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; padding: 0; box-shadow: none; -webkit-tap-highlight-color: transparent; }
+        .cal-ctrl-btn:active { opacity: 0.6; }
     </style>
 </head>
 <body>
@@ -402,9 +407,9 @@
             <div class="modal-header" style="display: flex; align-items: center; justify-content: space-between;">
                 <div style="width: 44px;"></div>
                 <div style="display: flex; align-items: center; justify-content: center; gap: 4px; flex: 1;">
-                    <button class="cal-ctrl-btn nav-btn" onclick="adjustCalendarMonth(-1)" style="min-width: 44px; padding: 0; background: transparent; font-size: 18px;">◀</button>
+                    <button class="cal-ctrl-btn" onclick="adjustCalendarMonth(-1)">◀</button>
                     <span id="cal-month-title" style="font-weight:900; font-size:17px; color:var(--text-main);">加載中...</span>
-                    <button class="cal-ctrl-btn nav-btn" onclick="adjustCalendarMonth(1)" style="min-width: 44px; padding: 0; background: transparent; font-size: 18px;">▶</button>
+                    <button class="cal-ctrl-btn" onclick="adjustCalendarMonth(1)">▶</button>
                 </div>
                 <button class="modal-close" onclick="closeCalendarModal(null)" style="min-width: 44px;">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v9h9"></path><circle cx="12" cy="12" r="3.5" fill="var(--card-bg)" stroke="currentColor"></circle></svg>
@@ -414,8 +419,10 @@
             <div id="cal-swipe-viewport">
                 <div id="cal-swipe-track">
                     <div class="cal-page" id="cal-main-page">
-                        <div class="calendar-grid" id="calendar-grid-container"></div>
-                        <div id="modal-date-records"></div>
+                        <div class="calendar-grid-wrap">
+                            <div class="calendar-grid" id="calendar-grid-container"></div>
+                        </div>
+                        <div class="modal-date-records-wrap" id="modal-date-records"></div>
                     </div>
                 </div>
             </div>
@@ -1080,13 +1087,16 @@
             ghost.style.top = '0'; 
             ghost.style.left = isPrev ? '-100vw' : '100vw';
             
+            const gridWrap = document.createElement('div');
+            gridWrap.className = 'calendar-grid-wrap';
+            
             const grid = document.createElement('div');
             grid.className = 'calendar-grid';
-            grid.id = 'calendar-grid-container';
             grid.innerHTML = generateCalendarHTML(y, m);
+            gridWrap.appendChild(grid);
             
             const recordsContainer = document.createElement('div');
-            recordsContainer.id = 'modal-date-records';
+            recordsContainer.className = 'modal-date-records-wrap';
             
             // 抓取並渲染該月份資料
             const prefix = `${y}-${(m + 1).toString().padStart(2, '0')}`;
@@ -1096,7 +1106,7 @@
             });
             recordsContainer.innerHTML = generateGroupedRecordsHTML(targetRecords);
 
-            ghost.appendChild(grid);
+            ghost.appendChild(gridWrap);
             ghost.appendChild(recordsContainer);
             return ghost;
         }
@@ -1123,11 +1133,11 @@
                 let deltaX = currentTouchX - touchStartX;
                 let deltaY = currentTouchY - this.touchStartY;
 
-                // 判斷是否為垂直滾動
+                // 判斷是否為垂直滾動 (例如滑動下方明細)
                 if (typeof this.isScrolling === 'undefined') {
                     this.isScrolling = Math.abs(deltaY) > Math.abs(deltaX);
                 }
-                if (this.isScrolling) return; // 垂直滾動時交給瀏覽器處理，不觸發水平滑動
+                if (this.isScrolling) return; // 垂直滾動時交給瀏覽器處理，不觸發橫向滑動換頁
 
                 if (!hasAddedGhosts && Math.abs(deltaX) > 5) {
                     hasAddedGhosts = true;
@@ -1377,7 +1387,7 @@
                 return b.id - a.id;
             });
 
-            // 呼叫統一的渲染函式生成群組卡片，取代舊版單獨羅列
+            // 呼叫統一的渲染函式生成群組卡片
             container.innerHTML = generateGroupedRecordsHTML(targetRecords);
         }
 
