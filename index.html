@@ -16,9 +16,8 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：版本 1.0.2 (正式升級版)
-        // 絕對不會強制登出，只會重新整理讀取新代碼
-        const APP_VERSION = "1.0.2"; 
+        // 🌟 自動版本檢查機制：版本 1.0.3 (絲滑動畫與防飛過龍修復版)
+        const APP_VERSION = "1.0.3"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
             if (savedVersion !== APP_VERSION) {
@@ -200,11 +199,9 @@
         
         #modal-date-records { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(60px + env(safe-area-inset-bottom)); padding-left: 16px; padding-right: 16px; }
         
-        /* 🔥 日曆視窗預留 Padding 防止陰影被截斷 🔥 */
-        #cal-swipe-viewport { padding: 4px 16px 12px 16px; box-sizing: border-box; }
+        #cal-swipe-viewport { padding: 4px 16px 12px 16px; box-sizing: border-box; overflow: hidden; }
 
-        /* 🔥 日曆大方形美化：變成巨型計數機按鈕 🔥 */
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; gap: 8px; text-align: center; padding: 16px 12px; background: var(--card-bg); border-radius: 20px; border: 2px solid var(--text-main); box-shadow: 0 4px 0 var(--text-main); box-sizing: border-box; width: 100%; margin: 0 4px 16px 4px; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; gap: 8px; text-align: center; padding: 16px 12px; background: var(--card-bg); border-radius: 20px; border: 2px solid var(--text-main); box-shadow: 0 4px 0 var(--text-main); box-sizing: border-box; width: 100%; margin: 0; }
         .cal-week-title { font-size: 14px; font-weight: 900; color: var(--text-main); padding: 4px 0; }
         .cal-day { font-size: 16px; font-weight: 900; color: var(--text-main); display: flex; align-items: center; justify-content: center; position: relative; aspect-ratio: 1; margin: 0 auto; width: 100%; max-width: 44px; height: auto; background-color: var(--card-bg); border-radius: 12px; border: 2px solid var(--text-main); box-shadow: 0 3px 0 var(--text-main); transition: transform 0.1s, box-shadow 0.1s; }
         .cal-day:active:not(.blur-day) { transform: translateY(3px); box-shadow: 0 0px 0 var(--text-main); }
@@ -311,7 +308,7 @@
 
         <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 20px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
         
-        <div style="position: absolute; bottom: 30px; font-size: 12px; color: var(--text-sub); font-weight: bold;">版本號: 1.0.0</div>
+        <div style="position: absolute; bottom: 30px; font-size: 12px; color: var(--text-sub); font-weight: bold;">Version: 1.0.3</div>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
@@ -410,8 +407,8 @@
                 </button>
             </div>
             
-            <div id="cal-swipe-viewport" style="position: relative; width: 100%; overflow: hidden; margin-bottom: 16px; touch-action: pan-y; padding: 4px 16px 12px 16px; box-sizing: border-box;">
-                <div id="cal-swipe-track" style="position: relative; width: 100%; will-change: transform; display: flex;">
+            <div id="cal-swipe-viewport">
+                <div id="cal-swipe-track" style="position: relative; width: 100%; will-change: transform; display: flex; align-items: flex-start;">
                     <div class="calendar-grid" id="calendar-grid-container" style="width: 100%; flex-shrink: 0;"></div>
                 </div>
             </div>
@@ -579,7 +576,7 @@
            }
         });
 
-        // 🌟 開 App 時自動洗機機制 (保留主題與版本號)
+        // 🟢 靜默清除快取
         window.silentWipe = function() {
             try {
                 const theme = localStorage.getItem('apple-app-theme');
@@ -616,7 +613,7 @@
             });
         };
 
-        // 🌟 純粹登出，不再觸發強制洗機
+        // 🟢 登出：不再強制重新載入，避免觸發閃退感
         window.signOutGoogle = function() {
             const errorMsg = document.getElementById('login-error-msg');
             if (errorMsg) {
@@ -625,11 +622,7 @@
                 errorMsg.style.color = "#4ab3e3";
             }
             
-            signOut(auth).then(() => {
-                window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
-            }).catch(() => {
-                window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
-            });
+            signOut(auth);
         };
 
         onAuthStateChanged(auth, (user) => {
@@ -672,9 +665,7 @@
                 });
 
             } else {
-                // 🛑 一打開網頁發現未登入，立刻自動洗機，保證環境乾淨！
                 window.silentWipe();
-
                 loginScreen.style.display = 'flex';
                 errorMsg.style.display = 'none';
                 statusText.innerText = '尚未登入';
@@ -684,7 +675,6 @@
             }
         });
 
-        // 🔥 使用 onValue 即時監聽資料庫 🔥
         function startDatabaseSync(emailKey) {
             if (!recordsRef) return;
             
@@ -746,7 +736,7 @@
 
             setTimeout(() => {
                 if (isFirstLoad && document.getElementById('login-screen').style.display !== 'none') {
-                    errorMsg.innerText = "⏳ 網絡連線較慢，正在努力同步中...";
+                    errorMsg.innerText = "⏳ 網絡連線較慢，正在努力載入中...";
                     errorMsg.style.color = "#ffb3b3";
                 }
             }, 8000);
@@ -957,18 +947,29 @@
 
         function initChartSwipe() {
             const swipeArea = document.querySelector('.header-dashboard'); const swipeTarget = document.getElementById('chart-swipe-track');
-            let touchStartX = 0; let currentTouchX = 0; let isSwiping = false; let hasAddedGhosts = false;
+            let touchStartX = 0; let touchStartY = 0; let currentTouchX = 0; let isSwiping = false; let hasAddedGhosts = false;
 
-            swipeArea.addEventListener('touchstart', (e) => { if (e.touches.length > 1) return; touchStartX = e.touches[0].clientX; currentTouchX = touchStartX; isSwiping = true; hasAddedGhosts = false; swipeTarget.style.transition = 'none'; document.querySelectorAll('.ghost-chart').forEach(el => el.remove()); }, {passive: true});
+            swipeArea.addEventListener('touchstart', (e) => { 
+                if (e.touches.length > 1) return; 
+                touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; 
+                currentTouchX = touchStartX; isSwiping = true; hasAddedGhosts = false; swipeTarget.style.transition = 'none'; document.querySelectorAll('.ghost-chart').forEach(el => el.remove()); 
+            }, {passive: true});
+            
             swipeArea.addEventListener('touchmove', (e) => {
-                if (!isSwiping) return; currentTouchX = e.touches[0].clientX; let deltaX = currentTouchX - touchStartX;
+                if (!isSwiping) return; 
+                currentTouchX = e.touches[0].clientX; let deltaX = currentTouchX - touchStartX; let deltaY = e.touches[0].clientY - touchStartY;
+                
+                // 🔥 防 iOS 原生回彈 (Rubber-banding)
+                if (Math.abs(deltaX) > Math.abs(deltaY) && e.cancelable) {
+                    e.preventDefault();
+                }
+
                 if (!hasAddedGhosts && Math.abs(deltaX) > 5) {
                     hasAddedGhosts = true;
                     
                     const _now = new Date();
                     const isCurrentMonth = (currentSelectedYear === _now.getFullYear() && currentSelectedMonth === _now.getMonth());
 
-                    // Ghost Left (Swipe Right / prev)
                     if (viewMode === 'all') {
                         swipeTarget.appendChild(createGhostChart(_now.getFullYear(), _now.getMonth(), 'month', true));
                     } else {
@@ -977,7 +978,6 @@
                         swipeTarget.appendChild(createGhostChart(pY, pM, 'month', true));
                     }
 
-                    // Ghost Right (Swipe Left / next)
                     if (viewMode !== 'all') {
                         if (isCurrentMonth) {
                             swipeTarget.appendChild(createGhostChart(null, null, 'all', false));
@@ -989,9 +989,10 @@
                     }
                 }
                 
-                if (viewMode === 'all' && deltaX < 0) deltaX = 0; // 防止在總資產時繼續向左滑
-                swipeTarget.style.transform = `translateX(${deltaX}px)`;
-            }, {passive: true});
+                if (viewMode === 'all' && deltaX < 0) deltaX = 0; 
+                // Dampen the swipe distance slightly for a tighter feel
+                swipeTarget.style.transform = `translateX(${deltaX * 0.9}px)`;
+            }, {passive: false}); // passive false 才能用 preventDefault
 
             swipeArea.addEventListener('touchend', (e) => {
                 if (!isSwiping) return; isSwiping = false; let deltaX = currentTouchX - touchStartX; const threshold = window.innerWidth * 0.2; 
@@ -1001,9 +1002,9 @@
                 if (direction !== 0 && !(viewMode === 'all' && direction === 1)) { 
                     navigateSwipe(direction); 
                 } else { 
-                    swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)'; 
+                    swipeTarget.style.transition = 'transform 0.3s ease-out'; 
                     swipeTarget.style.transform = `translateX(0)`; 
-                    setTimeout(() => { document.querySelectorAll('.ghost-chart').forEach(el => el.remove()); }, 500); 
+                    setTimeout(() => { document.querySelectorAll('.ghost-chart').forEach(el => el.remove()); }, 300); 
                 }
             });
 
@@ -1011,17 +1012,17 @@
                 const _now = new Date();
                 const isCurrentMonth = (currentSelectedYear === _now.getFullYear() && currentSelectedMonth === _now.getMonth());
 
-                if (direction === 1) { // 向左滑
+                if (direction === 1) { 
                     if (viewMode === 'all') return;
                     if (isCurrentMonth) {
-                        viewMode = 'all'; // 當前月向左滑 -> 總結餘
+                        viewMode = 'all'; 
                     } else {
                         currentSelectedMonth++; 
                         if (currentSelectedMonth > 11) { currentSelectedMonth = 0; currentSelectedYear++; }
                     }
-                } else if (direction === -1) { // 向右滑
+                } else if (direction === -1) { 
                     if (viewMode === 'all') {
-                        viewMode = 'month'; // 總結餘向右滑 -> 當前月
+                        viewMode = 'month'; 
                         currentSelectedYear = _now.getFullYear();
                         currentSelectedMonth = _now.getMonth();
                     } else {
@@ -1031,7 +1032,7 @@
                 }
 
                 let targetTransformX = direction === 1 ? -window.innerWidth : window.innerWidth;
-                swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                swipeTarget.style.transition = 'transform 0.3s ease-out';
                 swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
                 
                 setTimeout(() => {
@@ -1039,26 +1040,32 @@
                     swipeTarget.style.transform = `translateX(0)`; 
                     document.querySelectorAll('.ghost-chart').forEach(el => el.remove()); 
                     syncHeaderDisplay(true); 
-                }, 500);
+                }, 300);
             }
         }
 
         function initCalendarSwipe() {
             const swipeArea = document.getElementById('cal-swipe-viewport');
             const swipeTarget = document.getElementById('cal-swipe-track');
-            let touchStartX = 0; let currentTouchX = 0; let isSwiping = false; let hasAddedGhosts = false;
+            let touchStartX = 0; let touchStartY = 0; let currentTouchX = 0; let isSwiping = false; let hasAddedGhosts = false;
 
             swipeArea.addEventListener('touchstart', (e) => {
                 if (e.touches.length > 1) return;
-                touchStartX = e.touches[0].clientX; currentTouchX = touchStartX; isSwiping = true; hasAddedGhosts = false;
+                touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
+                currentTouchX = touchStartX; isSwiping = true; hasAddedGhosts = false;
                 swipeTarget.style.transition = 'none';
                 document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
             }, {passive: true});
 
             swipeArea.addEventListener('touchmove', (e) => {
                 if (!isSwiping) return;
-                currentTouchX = e.touches[0].clientX; let deltaX = currentTouchX - touchStartX;
+                currentTouchX = e.touches[0].clientX; let deltaX = currentTouchX - touchStartX; let deltaY = e.touches[0].clientY - touchStartY;
                 
+                // 🔥 防 iOS 邊緣回彈
+                if (Math.abs(deltaX) > Math.abs(deltaY) && e.cancelable) {
+                    e.preventDefault();
+                }
+
                 if (!hasAddedGhosts && Math.abs(deltaX) > 5) {
                     hasAddedGhosts = true;
                     let pY = displayYear; let pM = displayMonth - 1; if (pM < 0) { pM = 11; pY--; }
@@ -1066,8 +1073,8 @@
                     let nY = displayYear; let nM = displayMonth + 1; if (nM > 11) { nM = 0; nY++; }
                     swipeTarget.appendChild(createGhostCal(nY, nM, false));
                 }
-                swipeTarget.style.transform = `translateX(${deltaX}px)`;
-            }, {passive: true});
+                swipeTarget.style.transform = `translateX(${deltaX * 0.9}px)`;
+            }, {passive: false});
 
             swipeArea.addEventListener('touchend', (e) => {
                 if (!isSwiping) return;
@@ -1076,19 +1083,21 @@
                 if (deltaX > threshold) { direction = -1; } else if (deltaX < -threshold) { direction = 1; }
                 
                 if (direction !== 0) {
-                    let targetTransformX = direction === 1 ? -(swipeArea.offsetWidth + 20) : (swipeArea.offsetWidth + 20);
-                    swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                    // 🔥 完美修正「飛過龍」算法：以實際 track 寬度為準 🔥
+                    const trackWidth = swipeTarget.offsetWidth;
+                    let targetTransformX = direction === 1 ? -(trackWidth + 20) : (trackWidth + 20);
+                    swipeTarget.style.transition = 'transform 0.3s ease-out';
                     swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
                     setTimeout(() => {
                         swipeTarget.style.transition = 'none';
                         swipeTarget.style.transform = `translateX(0)`;
                         document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
                         adjustCalendarMonth(direction);
-                    }, 500);
+                    }, 300);
                 } else {
-                    swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                    swipeTarget.style.transition = 'transform 0.3s ease-out';
                     swipeTarget.style.transform = `translateX(0)`;
-                    setTimeout(() => { document.querySelectorAll('.ghost-cal').forEach(el => el.remove()); }, 500);
+                    setTimeout(() => { document.querySelectorAll('.ghost-cal').forEach(el => el.remove()); }, 300);
                 }
             });
         }
@@ -1287,10 +1296,34 @@
             return `<div class="${cls}" data-date="${cellDateStr}">${day}${dot}</div>`;
         }
 
+        // 🔥 高度動畫計算器：平滑伸縮日曆 🔥
         function renderGridCalendar() {
-            document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
+            const viewport = document.getElementById('cal-swipe-viewport');
             const gridContainer = document.getElementById('calendar-grid-container');
+            
+            // 記錄改變前嘅高度
+            const startHeight = gridContainer.offsetHeight;
+            if (startHeight > 0) viewport.style.height = startHeight + 'px';
+            
+            document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
             gridContainer.innerHTML = generateCalendarHTML(displayYear, displayMonth);
+            
+            // 記錄改變後嘅高度並執行動畫
+            if (startHeight > 0) {
+                viewport.style.height = 'auto';
+                const endHeight = gridContainer.offsetHeight;
+                
+                viewport.style.height = startHeight + 'px';
+                viewport.offsetHeight; // Force reflow
+                
+                viewport.style.transition = 'height 0.3s ease-out';
+                viewport.style.height = endHeight + 'px';
+                
+                setTimeout(() => {
+                    viewport.style.transition = 'none';
+                    viewport.style.height = 'auto';
+                }, 300);
+            }
         }
 
         function renderModalDateRecords() {
