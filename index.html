@@ -16,8 +16,8 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：版本 1.0.14 (極致多段漸變 + 自訂圖表顏色版)
-        const APP_VERSION = "1.0.14"; 
+        // 🌟 自動版本檢查機制：版本 1.0.15 (優化漸變消失 + 顏色設定收合版)
+        const APP_VERSION = "1.0.15"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
             if (savedVersion !== APP_VERSION) {
@@ -215,18 +215,18 @@
             box-shadow: none;
         }
         
-        /* 🔥 1.0.14：多梯級長效漸變，極致平滑漸隱沒入效果 🔥 */
+        /* 🔥 1.0.15：極致順滑且不遮擋資料的漸變遮罩 🔥 */
         .modal-date-records-wrap { 
             flex: 1; 
             overflow-y: auto; 
             -webkit-overflow-scrolling: touch; 
-            padding: 45px 20px calc(80px + env(safe-area-inset-bottom)) 20px; 
-            margin-top: -30px; /* 將容器拉進日曆底下 30px */
+            padding: 10px 20px calc(80px + env(safe-area-inset-bottom)) 20px; 
+            margin-top: 0px; /* 取消負距離拉伸，防止被實體背景遮擋消失 */
             position: relative;
             z-index: 5;
-            /* 多重停點製造非常順滑的消失感 */
-            -webkit-mask-image: linear-gradient(to bottom, transparent 0px, rgba(0,0,0,0.02) 10px, rgba(0,0,0,0.1) 25px, rgba(0,0,0,0.4) 45px, rgba(0,0,0,0.8) 65px, black 85px, black 100%);
-            mask-image: linear-gradient(to bottom, transparent 0px, rgba(0,0,0,0.02) 10px, rgba(0,0,0,0.1) 25px, rgba(0,0,0,0.4) 45px, rgba(0,0,0,0.8) 65px, black 85px, black 100%);
+            /* 將漸變範圍設置在頂部的 70px 內，分 4 個階段平滑過渡 */
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0px, rgba(0,0,0,0.05) 15px, rgba(0,0,0,0.3) 35px, rgba(0,0,0,0.7) 55px, black 70px, black 100%);
+            mask-image: linear-gradient(to bottom, transparent 0px, rgba(0,0,0,0.05) 15px, rgba(0,0,0,0.3) 35px, rgba(0,0,0,0.7) 55px, black 70px, black 100%);
         }
         
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; gap: 8px; text-align: center; padding: 8px; background: transparent; border: none; box-sizing: border-box; }
@@ -339,7 +339,7 @@
 
         <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 20px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
         
-        <div class="login-version-tag">VERSION 1.0.14</div>
+        <div class="login-version-tag">VERSION 1.0.15</div>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
@@ -355,8 +355,11 @@
             </div>
 
             <div class="settings-group">
-                <span class="settings-label">圖表顏色設定</span>
-                <div style="display: flex; gap: 10px;">
+                <span class="settings-label">圖表設定</span>
+                <button class="settings-action-btn" onclick="document.getElementById('color-settings-box').style.display = document.getElementById('color-settings-box').style.display === 'none' ? 'flex' : 'none'">
+                    🎨 設定圖表顏色
+                </button>
+                <div id="color-settings-box" style="display: none; gap: 10px; margin-top: 8px;">
                     <div style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; background:var(--nav-btn-bg); padding:10px 0; border-radius:12px; border: 1px solid var(--border-color);">
                         <input type="color" id="setting-income-color" style="width:30px; height:30px; border:none; cursor:pointer; background:transparent;" onchange="updateChartColors()">
                         <span style="font-size:14px; font-weight:bold; color:var(--text-main);">收入</span>
@@ -599,7 +602,6 @@
         
         let recordsRef = null; 
 
-        // 🔥 1.0.14：新增全域變數讀取自訂顏色 (預設為原有的藍/粉) 🔥
         window.chartIncomeColor = localStorage.getItem('app_chart_income_color') || '#4ab3e3';
         window.chartExpenseColor = localStorage.getItem('app_chart_expense_color') || '#f7a3b6';
 
@@ -627,7 +629,6 @@
            }
         });
 
-        // 背景靜默大掃除
         window.silentWipe = function() {
             try {
                 const theme = localStorage.getItem('apple-app-theme');
@@ -847,7 +848,6 @@
             setTimeout(function() { window.scrollTo(0, 1); }, 0);
             if (!window.records) window.records = [];
             
-            // 🔥 1.0.14：套用自訂顏色到輸入框 🔥
             document.getElementById('setting-income-color').value = window.chartIncomeColor;
             document.getElementById('setting-expense-color').value = window.chartExpenseColor;
             
@@ -856,7 +856,6 @@
             syncHeaderDisplay();
         });
         
-        // 🔥 1.0.14：圖表顏色變更並儲存 🔥
         window.updateChartColors = function() {
             window.chartIncomeColor = document.getElementById('setting-income-color').value;
             window.chartExpenseColor = document.getElementById('setting-expense-color').value;
@@ -986,7 +985,6 @@
                 ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
             };
 
-            // 🔥 1.0.14：套用自訂圖表顏色 🔥
             if (expense > 0) drawSegment(expStart, expEnd, window.chartExpenseColor);
             if (income > 0) drawSegment(incStart, incEnd, window.chartIncomeColor); 
         }
@@ -1305,7 +1303,6 @@
                 ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
             };
             
-            // 🔥 1.0.14：套用自訂圖表顏色 🔥
             if (expense > 0) drawSegment(expStart, expEnd, window.chartExpenseColor);
             if (income > 0) drawSegment(incStart, incEnd, window.chartIncomeColor); 
         }
