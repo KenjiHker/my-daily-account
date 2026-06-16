@@ -16,8 +16,8 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：版本 1.0.16 (補回版本號 + 物理釘選防留白機制)
-        const APP_VERSION = "1.0.17"; 
+        // 🌟 自動版本檢查機制：版本 1.0.18 (移除鎖死留白，導入 Webkit 專屬滿版語法與真實高度校正)
+        const APP_VERSION = "1.0.18"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
             if (savedVersion !== APP_VERSION) {
@@ -28,8 +28,14 @@
             }
         })();
 
-        // 🌟 v1.0.16 新增：專注於解決鍵盤收起後的畫面上推偏移
+        // 🌟 v1.0.18 新增：動態真實高度校正
         document.addEventListener('DOMContentLoaded', () => {
+            // 利用真實 innerHeight 強迫 iOS 重繪底部，解決 svh 偶爾失效的問題
+            setTimeout(() => {
+                document.body.style.height = window.innerHeight + 'px';
+                setTimeout(() => { document.body.style.height = ''; }, 100); // 隨後交還給 CSS
+            }, 100);
+
             // 監聽輸入框失去焦點，解決鍵盤收合後畫面沒有掉下來的留白
             document.body.addEventListener('focusout', (e) => {
                 if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
@@ -41,21 +47,24 @@
             });
         });
 
-        // 旋轉螢幕時強迫回正
+        // 旋轉螢幕時使用真實高度重新拉伸
         window.addEventListener('orientationchange', () => {
             setTimeout(() => {
                 window.scrollTo(0, 0);
-                document.body.scrollTop = 0;
+                document.body.style.height = window.innerHeight + 'px';
+                setTimeout(() => { document.body.style.height = ''; }, 100);
             }, 200);
         });
     </script>
     
     <style>
-        /* v1.0.16 修改：捨棄 svh 計算，改用 100% 配合 fixed top/bottom 物理拉伸 */
+        /* v1.0.18 修改：導入 -webkit-fill-available 配合 100svh 雙重確保滿版 */
         html { 
             background-color: var(--bg-color); 
-            width: 100%; 
-            height: 100%; 
+            width: 100vw; 
+            height: 100vh; /* fallback */
+            height: -webkit-fill-available; /* Apple 專屬滿版語法 */
+            height: 100svh;
             overflow: hidden; 
             overscroll-behavior: none;
         }
@@ -79,7 +88,7 @@
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; transition: background-color 0.5s, border-color 0.5s, color 0.5s; }
         
-        /* v1.0.16 修改：用 top: 0, bottom: 0 釘死上下邊界，阻絕 iOS 高度判定錯誤的可能 */
+        /* v1.0.18 修改：移除 top:0 bottom:0 的物理鎖死，改回 100svh 滿版設計 */
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
             background-color: var(--bg-color); 
@@ -90,9 +99,10 @@
             position: fixed;
             top: 0; 
             left: 0; 
-            right: 0;
-            bottom: 0;
-            width: 100%; 
+            width: 100vw; 
+            height: 100vh; /* fallback */
+            height: -webkit-fill-available;
+            height: 100svh;
             overflow: hidden; 
             overscroll-behavior-y: none;
         }
@@ -124,8 +134,11 @@
 
         #login-screen {
             position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0; /* 同樣套用物理拉伸 */
-            width: 100%; height: 100%;
+            top: 0; left: 0; 
+            width: 100vw; 
+            height: 100vh;
+            height: -webkit-fill-available;
+            height: 100svh;
             background-color: var(--bg-color);
             z-index: 99999;
             display: flex;
@@ -137,7 +150,7 @@
         .login-title { font-size: 32px; font-weight: 900; color: var(--text-main); margin-bottom: 12px; }
         .login-subtitle { font-size: 16px; font-weight: bold; color: var(--text-sub); margin-bottom: 40px; }
 
-        /* v1.0.16 修改：補回消失的登入畫面版本號 CSS */
+        /* v1.0.18 維持版本標記 */
         .login-version-tag { position: absolute; bottom: max(30px, env(safe-area-inset-bottom)); font-size: 13px; color: var(--text-sub); font-weight: 900; letter-spacing: 1.5px; opacity: 0.7;}
 
         #connection-dot {
@@ -334,7 +347,7 @@
 
         <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 20px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
         
-        <div class="login-version-tag">VERSION 1.0.17</div>
+        <div class="login-version-tag">VERSION 1.0.18</div>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
