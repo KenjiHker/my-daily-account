@@ -16,8 +16,8 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：版本 1.0.10 (極致加強漸變特效版)
-        const APP_VERSION = "1.0.10"; 
+        // 🌟 自動版本檢查機制：版本 1.0.11 (精準漸變特效 + 8秒極速防卡死清除版)
+        const APP_VERSION = "1.0.11"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
             if (savedVersion !== APP_VERSION) {
@@ -215,17 +215,21 @@
             box-shadow: none;
         }
         
-        /* 🔥 1.0.10：進一步加強漸變效果與重疊深度 🔥 */
+        /* 🔥 1.0.11：精準重寫的強烈漸變沒入特效 🔥 */
+        /* 將容器拉入日曆下方，並把 Mask 座標完全推向日曆邊緣下方 */
         .modal-date-records-wrap { 
             flex: 1; 
             overflow-y: auto; 
             -webkit-overflow-scrolling: touch; 
             padding: 110px 20px calc(80px + env(safe-area-inset-bottom)) 20px; 
-            margin-top: -100px; /* 將容器拉深至日曆背後，增加漸變過渡的空間 */
+            margin-top: -100px; /* 將容器頂部深深拉進日曆底下 100px */
             position: relative;
             z-index: 5;
-            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, transparent 30px, rgba(0,0,0,0.05) 50px, black 110px, black 100%);
-            mask-image: linear-gradient(to bottom, transparent 0%, transparent 30px, rgba(0,0,0,0.05) 50px, black 110px, black 100%);
+            /* 0~90px 完全透明隱形 (藏在日曆背後)
+               90~180px 強烈漸變浮現 (日曆下方的 90px 高度呈現精美漸變)
+               180px 以下完全清晰可見 */
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0px, transparent 90px, black 180px, black 100%);
+            mask-image: linear-gradient(to bottom, transparent 0px, transparent 90px, black 180px, black 100%);
         }
         
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; gap: 8px; text-align: center; padding: 8px; background: transparent; border: none; box-sizing: border-box; }
@@ -338,7 +342,7 @@
 
         <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 20px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
         
-        <div class="login-version-tag">VERSION 1.0.10</div>
+        <div class="login-version-tag">VERSION 1.0.11</div>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
@@ -713,7 +717,7 @@
             }
         });
 
-        // 包含防卡死自動清除重整的同步機制
+        // 🔥 1.0.11 優化：8 秒未進主頁即判定卡死自動清除重整 🔥
         function startDatabaseSync(emailKey) {
             if (!recordsRef) return;
             
@@ -773,18 +777,11 @@
                 handleData(snap);
             }, (err) => handleAuthError(err));
 
+            // 1.0.11: 單一 8 秒防卡死清除機制
             setTimeout(() => {
                 if (isFirstLoad && document.getElementById('login-screen').style.display !== 'none') {
-                    errorMsg.innerText = "⏳ 網絡連線較慢，正在努力同步中...";
-                    errorMsg.style.color = "#ffb3b3";
-                    
-                    // 防卡死保護機制：若等候總時間達 18 秒仍未進入主頁，判定卡死並徹底清除重整
-                    setTimeout(() => {
-                        if (isFirstLoad && document.getElementById('login-screen').style.display !== 'none') {
-                            window.silentWipe();
-                            window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
-                        }
-                    }, 10000);
+                    window.silentWipe();
+                    window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
                 }
             }, 8000);
         }
@@ -1066,151 +1063,63 @@
             }
         }
 
-        function generateGroupedRecordsHTML(targetRecords) {
-            if (targetRecords.length === 0) return ''; 
-            let html = '';
-            const groupedRecords = {}; 
-            targetRecords.forEach(r => { if (!groupedRecords[r.date]) groupedRecords[r.date] = []; groupedRecords[r.date].push(r); });
-
-            Object.keys(groupedRecords).sort((a, b) => new Date(b) - new Date(a)).forEach(dateStr => {
-                const dayRecords = groupedRecords[dateStr]; 
-                const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']; 
-                const dayOfWeekStr = weekDays[new Date(dateStr).getDay()];
-                
-                let daySum = 0; dayRecords.forEach(dr => { daySum += dr.amount; });
-                
-                html += `<div class="date-group"><div class="date-header"><span>${dateStr.replace(/-/g, '/')} ${dayOfWeekStr}</span><span class="date-summary-total">$${daySum.toLocaleString()}</span></div>`;
-
-                dayRecords.forEach(item => {
-                    const icon = item.category.split(' ')[0] || '📝'; 
-                    const name = item.category.substring(icon.length).trim() || item.category;
-                    html += `
-                        <div class="history-item" onclick="openRecordModal(${item.id})">
-                            <div class="item-left">
-                                <div class="item-icon">${icon}</div>
-                                <div class="item-info">
-                                    <span class="item-category">${name}</span>
-                                    ${item.diary ? `<span class="item-diary">${item.diary}</span>` : ''}
-                                </div>
-                            </div>
-                            <div class="item-right-action-wrapper">
-                                <div class="item-amount-box">
-                                    <span class="item-amount" style="color: ${item.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)'}">${item.type === 'income' ? '+' : '-'}$${item.amount.toLocaleString()}</span>
-                                </div>
-                                <button class="list-action-delete-btn" onclick="event.stopPropagation(); openDeleteModal(${item.id})">刪除</button>
-                            </div>
-                        </div>`;
-                });
-                html += `</div>`;
-            });
-            return html;
-        }
-
-        function createGhostPage(y, m, isPrev) {
-            const ghost = document.createElement('div');
-            ghost.className = 'cal-page ghost-page';
-            ghost.style.position = 'absolute'; 
-            ghost.style.top = '0'; 
-            ghost.style.left = isPrev ? '-100vw' : '100vw';
-            
-            const gridWrap = document.createElement('div');
-            gridWrap.className = 'calendar-grid-wrap';
-            
-            const grid = document.createElement('div');
-            grid.className = 'calendar-grid';
-            grid.innerHTML = generateCalendarHTML(y, m);
-            gridWrap.appendChild(grid);
-            
-            const recordsContainer = document.createElement('div');
-            recordsContainer.className = 'modal-date-records-wrap';
-            
-            const prefix = `${y}-${(m + 1).toString().padStart(2, '0')}`;
-            const targetRecords = records.filter(r => r.date.startsWith(prefix)).sort((a, b) => {
-                if (a.date !== b.date) return new Date(b.date) - new Date(a.date);
-                return b.id - a.id;
-            });
-            recordsContainer.innerHTML = generateGroupedRecordsHTML(targetRecords);
-
-            ghost.appendChild(gridWrap);
-            ghost.appendChild(recordsContainer);
-            return ghost;
-        }
-
         function initCalendarSwipe() {
             const swipeArea = document.getElementById('cal-swipe-viewport');
             const swipeTarget = document.getElementById('cal-swipe-track');
             let touchStartX = 0; let currentTouchX = 0; let isSwiping = false; let hasAddedGhosts = false;
 
-            swipeArea.addEventListener('touchstart', function(e) {
+            swipeArea.addEventListener('touchstart', (e) => {
                 if (e.touches.length > 1) return;
-                touchStartX = e.touches[0].clientX; currentTouchX = touchStartX; 
-                this.touchStartY = e.touches[0].clientY;
-                this.isScrolling = undefined;
-                isSwiping = true; hasAddedGhosts = false;
+                touchStartX = e.touches[0].clientX; currentTouchX = touchStartX; isSwiping = true; hasAddedGhosts = false;
                 swipeTarget.style.transition = 'none';
-                document.querySelectorAll('.ghost-page').forEach(el => el.remove());
+                document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
             }, {passive: true});
 
-            swipeArea.addEventListener('touchmove', function(e) {
+            swipeArea.addEventListener('touchmove', (e) => {
                 if (!isSwiping) return;
-                currentTouchX = e.touches[0].clientX; 
-                let currentTouchY = e.touches[0].clientY;
-                let deltaX = currentTouchX - touchStartX;
-                let deltaY = currentTouchY - this.touchStartY;
-
-                if (typeof this.isScrolling === 'undefined') {
-                    this.isScrolling = Math.abs(deltaY) > Math.abs(deltaX);
-                }
-                if (this.isScrolling) return; 
-
+                currentTouchX = e.touches[0].clientX; let deltaX = currentTouchX - touchStartX;
+                
                 if (!hasAddedGhosts && Math.abs(deltaX) > 5) {
                     hasAddedGhosts = true;
                     let pY = displayYear; let pM = displayMonth - 1; if (pM < 0) { pM = 11; pY--; }
-                    swipeTarget.appendChild(createGhostPage(pY, pM, true));
+                    swipeTarget.appendChild(createGhostCal(pY, pM, true));
                     let nY = displayYear; let nM = displayMonth + 1; if (nM > 11) { nM = 0; nY++; }
-                    swipeTarget.appendChild(createGhostPage(nY, nM, false));
+                    swipeTarget.appendChild(createGhostCal(nY, nM, false));
                 }
                 swipeTarget.style.transform = `translateX(${deltaX}px)`;
             }, {passive: true});
 
-            swipeArea.addEventListener('touchend', function(e) {
-                if (!isSwiping || this.isScrolling) return;
-                isSwiping = false; let deltaX = currentTouchX - touchStartX; const threshold = window.innerWidth * 0.2;
+            swipeArea.addEventListener('touchend', (e) => {
+                if (!isSwiping) return;
+                isSwiping = false; let deltaX = currentTouchX - touchStartX; const threshold = swipeArea.offsetWidth * 0.2;
                 let direction = 0;
                 if (deltaX > threshold) { direction = -1; } else if (deltaX < -threshold) { direction = 1; }
                 
                 if (direction !== 0) {
-                    let nextM = displayMonth + direction;
-                    let nextY = displayYear;
-                    if (nextM < 0) { nextM = 11; nextY--; }
-                    else if (nextM > 11) { nextM = 0; nextY++; }
-                    document.getElementById('cal-month-title').innerText = `${nextY}年 ${(nextM + 1).toString().padStart(2, '0')}月`;
-
-                    let targetTransformX = direction === 1 ? -window.innerWidth : window.innerWidth;
-                    swipeTarget.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                    let targetTransformX = direction === 1 ? -(swipeArea.offsetWidth + 20) : (swipeArea.offsetWidth + 20);
+                    swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)';
                     swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
-                    
                     setTimeout(() => {
-                        displayMonth = nextM;
-                        displayYear = nextY;
-                        showMonthRecords = true;
-
-                        renderGridCalendar(true); 
-                        renderModalDateRecords();
-
-                        void swipeTarget.offsetHeight; 
-
                         swipeTarget.style.transition = 'none';
                         swipeTarget.style.transform = `translateX(0)`;
-                        
-                        document.querySelectorAll('.ghost-page').forEach(el => el.remove());
-                    }, 400);
+                        document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
+                        adjustCalendarMonth(direction);
+                    }, 500);
                 } else {
-                    swipeTarget.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                    swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)';
                     swipeTarget.style.transform = `translateX(0)`;
-                    setTimeout(() => { document.querySelectorAll('.ghost-page').forEach(el => el.remove()); }, 400);
+                    setTimeout(() => { document.querySelectorAll('.ghost-cal').forEach(el => el.remove()); }, 500);
                 }
             });
+        }
+
+        function createGhostCal(y, m, isPrev) {
+            const ghost = document.createElement('div');
+            ghost.className = 'calendar-grid ghost-cal';
+            ghost.style.position = 'absolute'; ghost.style.top = '0'; ghost.style.width = '100%';
+            ghost.style.left = isPrev ? 'calc(-100% - 20px)' : 'calc(100% + 20px)';
+            ghost.innerHTML = generateCalendarHTML(y, m);
+            return ghost;
         }
 
         function updateDashboard(isSwipe = false) {
@@ -1403,24 +1312,28 @@
             return `<div class="${cls}" data-date="${cellDateStr}">${day}${dot}</div>`;
         }
 
-        function renderGridCalendar(skipTitleUpdate = false) {
-            if (!skipTitleUpdate) {
-                document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
-            }
+        function renderGridCalendar() {
+            document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
             const gridContainer = document.getElementById('calendar-grid-container');
-            if (gridContainer) gridContainer.innerHTML = generateCalendarHTML(displayYear, displayMonth);
+            gridContainer.innerHTML = generateCalendarHTML(displayYear, displayMonth);
         }
 
         function renderModalDateRecords() {
-            const container = document.getElementById('modal-date-records'); 
-            if (!container) return;
+            const container = document.getElementById('modal-date-records'); container.innerHTML = '';
             
             let targetRecords = [];
             if (showMonthRecords) {
+                document.getElementById('selected-date-label').innerText = `📍 ${displayYear}年${displayMonth + 1}月 明細`;
                 const prefix = `${displayYear}-${(displayMonth + 1).toString().padStart(2, '0')}`;
                 targetRecords = records.filter(r => r.date.startsWith(prefix));
             } else {
+                document.getElementById('selected-date-label').innerText = `📍 選定日期：${selectedDateStr}`;
                 targetRecords = records.filter(r => r.date === selectedDateStr);
+            }
+
+            if (targetRecords.length === 0) { 
+                container.innerHTML = `<div style="text-align:center; padding:18px; font-size:13px; color:#bbb;">📍 該${showMonthRecords ? '月份' : '日'}尚無收支明細</div>`; 
+                return; 
             }
 
             targetRecords.sort((a, b) => {
@@ -1428,7 +1341,33 @@
                 return b.id - a.id;
             });
 
-            container.innerHTML = generateGroupedRecordsHTML(targetRecords);
+            targetRecords.forEach(item => {
+                const itemDiv = document.createElement('div'); itemDiv.className = 'history-item'; itemDiv.style.cssText = 'border: 1.5px solid #222; border-radius:12px; margin-bottom:8px; box-shadow:0 3px 0 #222;';
+                itemDiv.onclick = () => openRecordModal(item.id);
+                const icon = item.category.split(' ')[0] || '📝'; const name = item.category.substring(icon.length).trim() || item.category;
+                
+                const dateLabel = showMonthRecords ? `<span style="font-size:11px; color:var(--text-sub); margin-left:6px; background:var(--nav-btn-bg); padding:2px 6px; border-radius:6px;">${item.date.split('-').slice(1).join('/')}</span>` : '';
+
+                itemDiv.innerHTML = `
+                    <div class="item-left">
+                        <div class="item-icon" style="width:30px; height:30px; font-size:14px;">${icon}</div>
+                        <div class="item-info">
+                            <div style="display:flex; align-items:center;">
+                                <span class="item-category" style="font-size:13px;">${name}</span>
+                                ${dateLabel}
+                            </div>
+                            ${item.diary ? `<span class="item-diary" style="font-size:11px; color:var(--text-sub); margin-top:2px;">${item.diary}</span>` : ''}
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-weight:bold; font-size:14px; color:${item.type==='income'?'var(--income-color)':'var(--expense-color)'}">
+                            ${item.type==='income'?'+':'-'}$${item.amount.toLocaleString()}
+                        </span>
+                        <button class="list-action-delete-btn" style="min-height:28px; padding:4px 8px;" onclick="event.stopPropagation(); openDeleteModal(${item.id})">刪除</button>
+                    </div>
+                `;
+                container.appendChild(itemDiv);
+            });
         }
 
         function executeAdd(amount, category, date, diary, forcedType) {
@@ -1440,11 +1379,6 @@
             const recordDate = new Date(date); currentSelectedYear = recordDate.getFullYear(); currentSelectedMonth = recordDate.getMonth();
             viewMode = 'month';
             syncHeaderDisplay();
-            
-            if (document.getElementById('calendarModal').classList.contains('active')) {
-                renderGridCalendar();
-                renderModalDateRecords();
-            }
         }
 
         function openMonthModal() { document.getElementById('monthModal').classList.add('active'); renderMonthButtonsGrid(); }
@@ -1677,11 +1611,6 @@
                         if (window.saveData) window.saveData(records);
                         currentSelectedYear = year; currentSelectedMonth = recordState.date.getMonth(); viewMode = 'month';
                         syncHeaderDisplay();
-                        
-                        if (document.getElementById('calendarModal').classList.contains('active')) {
-                            renderGridCalendar();
-                            renderModalDateRecords();
-                        }
                     }
                 }
                 closeRecordModal();
@@ -1701,7 +1630,25 @@
                 listContainer.innerHTML = `<div class="empty-state-wrapper"><div class="empty-text-main">沒有記錄</div><div class="empty-text-sub" style="font-size:13px; color:#aaa; margin-top:2px;">點擊 ＋ 號新增一筆</div></div>`; return;
             }
 
-            listContainer.innerHTML = generateGroupedRecordsHTML(filteredRecords);
+            const groupedRecords = {}; filteredRecords.forEach(r => { if (!groupedRecords[r.date]) groupedRecords[r.date] = []; groupedRecords[r.date].push(r); });
+
+            Object.keys(groupedRecords).sort((a, b) => new Date(b) - new Date(a)).forEach(dateStr => {
+                const dayRecords = groupedRecords[dateStr]; const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']; const dayOfWeekStr = weekDays[new Date(dateStr).getDay()];
+                const dateGroupDiv = document.createElement('div'); dateGroupDiv.className = 'date-group';
+                let daySum = 0; dayRecords.forEach(dr => { daySum += dr.amount; });
+                const headerDiv = document.createElement('div'); headerDiv.className = 'date-header'; headerDiv.innerHTML = `<span>${dateStr.replace(/-/g, '/')} ${dayOfWeekStr}</span><span class="date-summary-total">$${daySum.toLocaleString()}</span>`; dateGroupDiv.appendChild(headerDiv);
+
+                dayRecords.forEach(item => {
+                    const itemDiv = document.createElement('div'); itemDiv.className = 'history-item'; itemDiv.onclick = () => openRecordModal(item.id);
+                    const icon = item.category.split(' ')[0] || '📝'; const name = item.category.substring(icon.length).trim() || item.category;
+                    itemDiv.innerHTML = `
+                        <div class="item-left"><div class="item-icon">${icon}</div><div class="item-info"><span class="item-category">${name}</span>${item.diary ? `<span class="item-diary">${item.diary}</span>` : ''}</div></div>
+                        <div class="item-right-action-wrapper"><div class="item-amount-box"><span class="item-amount" style="color: ${item.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)'}">${item.type === 'income' ? '+' : '-'}$${item.amount.toLocaleString()}</span></div><button class="list-action-delete-btn" onclick="event.stopPropagation(); openDeleteModal(${item.id})">刪除</button></div>
+                    `;
+                    dateGroupDiv.appendChild(itemDiv);
+                });
+                listContainer.appendChild(dateGroupDiv);
+            });
         }
     </script>
 </body>
