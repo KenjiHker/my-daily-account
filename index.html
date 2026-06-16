@@ -16,8 +16,8 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：版本 1.0.6 (修復 iOS 底部留白 + 增強漸隱特效版)
-        const APP_VERSION = "1.0.6"; 
+        // 🌟 自動版本檢查機制：版本 1.0.7 (終極修復 iOS 底部白邊 + 極致漸變版)
+        const APP_VERSION = "1.0.7"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
             if (savedVersion !== APP_VERSION) {
@@ -30,13 +30,12 @@
     </script>
     
     <style>
-        /* 🔥 1.0.6：使用 100dvh 與 inset 0 深度解決 iOS 底部留白問題 🔥 */
+        /* 🔥 1.0.7：強制 HTML 滿版與底色，解決 iOS 底部留白白邊問題 🔥 */
         html { 
-            background-color: var(--bg-color); 
-            width: 100vw; 
-            height: 100dvh; 
-            position: fixed; 
-            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--bg-color) !important; 
+            width: 100%; 
+            height: 100%; 
+            margin: 0; padding: 0;
             overflow: hidden; 
             overscroll-behavior: none;
         }
@@ -60,25 +59,31 @@
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; transition: background-color 0.5s, border-color 0.5s, color 0.5s; }
         
+        /* 🔥 1.0.7：改用絕對定位絕對滿版，對抗 Safe Area 誤差 🔥 */
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            background-color: var(--bg-color); 
+            background-color: var(--bg-color) !important; 
             color: var(--text-main); 
             line-height: 1.4; 
             display: flex; 
             flex-direction: column; 
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0; 
-            width: 100vw; 
-            height: 100dvh; 
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            width: 100%; 
+            height: 100%; 
             overflow: hidden; 
             overscroll-behavior-y: none;
         }
-
-        @supports not (height: 100dvh) {
-            html, body { height: 100vh; }
-        }
         
+        /* 底層安全墊片：防止任何彈性佈局擠壓出現的白底 */
+        .safe-area-bottom-fill {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            height: env(safe-area-inset-bottom, 40px);
+            background-color: var(--bg-color);
+            z-index: -10;
+        }
+
         a, button, .clickable, .history-item, .nav-btn, .cal-day, .emoji-item, .calc-btn, .month-cell-btn { cursor: pointer; }
 
         .google-btn { background-color: #ffffff; color: #757575; border: 1px solid #ddd; border-radius: 24px; padding: 12px 24px; font-size: 16px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; width: 100%; transition: transform 0.2s; }
@@ -105,9 +110,9 @@
         }
 
         #login-screen {
-            position: fixed;
+            position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
-            width: 100vw; height: 100dvh;
+            width: 100%; height: 100%;
             background-color: var(--bg-color);
             z-index: 99999;
             display: flex;
@@ -185,9 +190,9 @@
         .month-cell-btn:active { transform: translateY(4px); box-shadow: 0 0px 0 var(--text-main); }
         .month-cell-btn.active { background: var(--primary-color); color: #ffffff; border-color: var(--text-main); }
 
-        .sidebar-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100dvh; background: rgba(0,0,0,0.5); z-index: 9998; opacity: 0; pointer-events: none; transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: opacity; }
+        .sidebar-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9998; opacity: 0; pointer-events: none; transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: opacity; }
         .sidebar-overlay.active { opacity: 1; pointer-events: auto; }
-        .sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: 280px; height: 100dvh; background: var(--card-bg); z-index: 9999; transform: translateX(-100%); transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.5s ease; box-shadow: 0 0 0 rgba(0,0,0,0); display: flex; flex-direction: column; will-change: transform; }
+        .sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: 280px; height: 100%; background: var(--card-bg); z-index: 9999; transform: translateX(-100%); transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.5s ease; box-shadow: 0 0 0 rgba(0,0,0,0); display: flex; flex-direction: column; will-change: transform; }
         .sidebar.active { transform: translateX(0); box-shadow: 4px 0 20px rgba(0,0,0,0.1); }
         .sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: max(20px, env(safe-area-inset-top)) 20px 20px; border-bottom: 1px solid var(--border-color); }
         .sidebar-header h2 { font-size: 20px; font-weight: 800; color: var(--text-main); margin: 0; }
@@ -204,15 +209,14 @@
         .action-cancel-block-btn { flex: 1; height: 50px; background: var(--nav-btn-bg); color: var(--text-main); border: 2.5px solid #222222; border-radius: var(--radius-sub); font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 #222222; }
         [data-theme="dark"] .action-cancel-block-btn { border-color: #ffffff; box-shadow: 0 4px 0 #ffffff; }
 
-        .calendar-sheet { height: 100dvh !important; max-height: 100dvh !important; border-radius: 0 !important; display: flex; flex-direction: column; border-top: none !important; background: var(--bg-color) !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-left: 0 !important; padding-right: 0 !important; padding-bottom: 0 !important; overflow: hidden !important; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1) !important; will-change: transform; }
+        .calendar-sheet { height: 100% !important; max-height: 100% !important; border-radius: 0 !important; display: flex; flex-direction: column; border-top: none !important; background: var(--bg-color) !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-left: 0 !important; padding-right: 0 !important; padding-bottom: 0 !important; overflow: hidden !important; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1) !important; will-change: transform; }
         .calendar-sheet .modal-header { padding: 0 20px; margin-bottom: 8px; }
         
-        #cal-swipe-viewport { position: relative; width: 100vw; flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+        #cal-swipe-viewport { position: relative; width: 100%; flex: 1; overflow: hidden; display: flex; flex-direction: column; }
         
         #cal-swipe-track { position: relative; width: 100%; height: 100%; display: flex; transform: translateZ(0); -webkit-transform: translateZ(0); will-change: transform; }
-        .cal-page, .ghost-page { width: 100vw; flex-shrink: 0; display: flex; flex-direction: column; padding: 0; height: 100%; overflow: hidden; transform: translateZ(0); -webkit-transform: translateZ(0); backface-visibility: hidden; -webkit-backface-visibility: hidden;}
+        .cal-page, .ghost-page { width: 100%; flex-shrink: 0; display: flex; flex-direction: column; padding: 0; height: 100%; overflow: hidden; transform: translateZ(0); -webkit-transform: translateZ(0); backface-visibility: hidden; -webkit-backface-visibility: hidden;}
         
-        /* 🔥 1.0.6：徹底移除日曆下方的框線與陰影 🔥 */
         .calendar-grid-wrap { 
             padding: 0 12px 0 12px; 
             flex-shrink: 0; 
@@ -223,17 +227,17 @@
             box-shadow: none;
         }
         
-        /* 🔥 1.0.6：增強漸隱遮罩範圍 (從 16px 放大到 50px) 讓滑動消失效果更高級平滑 🔥 */
+        /* 🔥 1.0.7：重疊式排版與深度 Mask 實現高級漸變沒入效果 🔥 */
         .modal-date-records-wrap { 
             flex: 1; 
             overflow-y: auto; 
             -webkit-overflow-scrolling: touch; 
-            padding: 0 20px; 
-            padding-bottom: calc(80px + env(safe-area-inset-bottom)); 
-            padding-top: 24px; 
-            margin-top: -10px; /* 微調負距讓漸變與日曆緊密接合 */
-            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 50px, black 100%);
-            mask-image: linear-gradient(to bottom, transparent 0%, black 50px, black 100%);
+            padding: 80px 20px calc(80px + env(safe-area-inset-bottom)) 20px; 
+            margin-top: -70px; /* 將容器拉至日曆背後 */
+            position: relative;
+            z-index: 5;
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.05) 15px, black 70px, black 100%);
+            mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.05) 15px, black 70px, black 100%);
         }
         
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; gap: 8px; text-align: center; padding: 8px; background: transparent; border: none; box-sizing: border-box; }
@@ -246,7 +250,7 @@
         .cal-day.selected-circle { background-color: var(--text-main) !important; color: var(--card-bg) !important; box-shadow: 0 3px 0 var(--text-sub); }
         .day-dot { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); width: 6px; height: 6px; background-color: #ff5b5b; border-radius: 50%; border: 1.5px solid var(--card-bg); }
 
-        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100dvh; background: rgba(0,0,0,0.5); z-index: 2000; display: none; align-items: flex-end; transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: opacity; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; display: none; align-items: flex-end; transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: opacity; }
         .modal-overlay.active { display: flex; opacity: 1; }
         .modal-overlay.top-aligned { align-items: flex-start; }
         
@@ -300,7 +304,7 @@
         .handdrawn-font-svg { width: 100%; height: 100%; display: block; }
         .handdrawn-font-svg path { fill: none; stroke: var(--calc-text); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
 
-        .full-screen-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100dvh; background: var(--bg-color); z-index: 3000; display: none; flex-direction: column; overflow: hidden; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: transform; }
+        .full-screen-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 3000; display: none; flex-direction: column; overflow: hidden; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: transform; }
         .full-screen-modal.active { display: flex; }
         .record-header-bar { display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 12px; background: var(--bg-color); border-bottom: none; font-size: 18px; font-weight: bold; color: var(--text-main); z-index: 10; }
         .record-top-content { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; -webkit-overflow-scrolling: touch; padding-bottom: calc(52vh + env(safe-area-inset-bottom)); }
@@ -311,7 +315,7 @@
         .record-cat-item.active .record-cat-icon { border-color: var(--primary-color); background: #eef7fc; transform: scale(1.1); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         [data-theme="dark"] .record-cat-item.active .record-cat-icon { background: #233540; }
 
-        .record-bottom-calc-area { position: absolute; bottom: 0; left: 0; width: 100vw; height: calc(50% + env(safe-area-inset-bottom)); min-height: 380px; background: var(--calc-bg); border-top: 3px solid var(--primary-color); border-top-left-radius: 28px; border-top-right-radius: 28px; padding-bottom: env(safe-area-inset-bottom); display: flex; flex-direction: column; transform: translateY(0); transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); box-shadow: 0 -4px 20px rgba(0,0,0,0.1); z-index: 100; will-change: transform; }
+        .record-bottom-calc-area { position: absolute; bottom: 0; left: 0; right: 0; width: 100%; height: calc(50% + env(safe-area-inset-bottom)); min-height: 380px; background: var(--calc-bg); border-top: 3px solid var(--primary-color); border-top-left-radius: 28px; border-top-right-radius: 28px; padding-bottom: env(safe-area-inset-bottom); display: flex; flex-direction: column; transform: translateY(0); transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); box-shadow: 0 -4px 20px rgba(0,0,0,0.1); z-index: 100; will-change: transform; }
         .record-bottom-calc-area.collapsed { transform: translateY(calc(100% - 96px - env(safe-area-inset-bottom))); }
         .drawer-handle-wrap { width: 100%; height: 24px; display: flex; align-items: center; justify-content: center; cursor: grab; padding: 14px 0 6px 0; }
         .drawer-handle { width: 40px; height: 5px; background: var(--text-sub); border-radius: 3px; opacity: 0.4; }
@@ -334,6 +338,8 @@
 </head>
 <body>
     
+    <div class="safe-area-bottom-fill"></div>
+
     <div id="toast-container"></div>
 
     <div id="login-screen">
@@ -346,7 +352,7 @@
 
         <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 20px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
         
-        <div class="login-version-tag">VERSION 1.0.6</div>
+        <div class="login-version-tag">VERSION 1.0.7</div>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
