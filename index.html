@@ -16,8 +16,8 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：版本 1.0.9 (新增防卡死與未登入自動清除機制)
-        const APP_VERSION = "1.0.9"; 
+        // 🌟 自動版本檢查機制：版本 1.0.10 (極致加強漸變特效版)
+        const APP_VERSION = "1.0.10"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
             if (savedVersion !== APP_VERSION) {
@@ -30,7 +30,6 @@
     </script>
     
     <style>
-        /* 🔥 1.0.8 完美滿版設定保留 🔥 */
         html { 
             background-color: var(--bg-color); 
             width: 100vw; 
@@ -206,7 +205,6 @@
         #cal-swipe-track { position: relative; width: 100%; height: 100%; display: flex; transform: translateZ(0); -webkit-transform: translateZ(0); will-change: transform; }
         .cal-page, .ghost-page { width: 100vw; flex-shrink: 0; display: flex; flex-direction: column; padding: 0; height: 100%; overflow: hidden; transform: translateZ(0); -webkit-transform: translateZ(0); backface-visibility: hidden; -webkit-backface-visibility: hidden;}
         
-        /* 🔥 完美保留：無框線、無陰影的乾淨日曆底部 🔥 */
         .calendar-grid-wrap { 
             padding: 0 12px 0 12px; 
             flex-shrink: 0; 
@@ -217,17 +215,17 @@
             box-shadow: none;
         }
         
-        /* 🔥 完美保留：數據區塊與日曆重疊並擁有高級漸變消失特效 🔥 */
+        /* 🔥 1.0.10：進一步加強漸變效果與重疊深度 🔥 */
         .modal-date-records-wrap { 
             flex: 1; 
             overflow-y: auto; 
             -webkit-overflow-scrolling: touch; 
-            padding: 80px 20px calc(80px + env(safe-area-inset-bottom)) 20px; 
-            margin-top: -70px; /* 將容器拉至日曆背後，實現極致空間感 */
+            padding: 110px 20px calc(80px + env(safe-area-inset-bottom)) 20px; 
+            margin-top: -100px; /* 將容器拉深至日曆背後，增加漸變過渡的空間 */
             position: relative;
             z-index: 5;
-            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.05) 15px, black 70px, black 100%);
-            mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.05) 15px, black 70px, black 100%);
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, transparent 30px, rgba(0,0,0,0.05) 50px, black 110px, black 100%);
+            mask-image: linear-gradient(to bottom, transparent 0%, transparent 30px, rgba(0,0,0,0.05) 50px, black 110px, black 100%);
         }
         
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; gap: 8px; text-align: center; padding: 8px; background: transparent; border: none; box-sizing: border-box; }
@@ -340,7 +338,7 @@
 
         <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 20px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
         
-        <div class="login-version-tag">VERSION 1.0.9</div>
+        <div class="login-version-tag">VERSION 1.0.10</div>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
@@ -780,7 +778,7 @@
                     errorMsg.innerText = "⏳ 網絡連線較慢，正在努力同步中...";
                     errorMsg.style.color = "#ffb3b3";
                     
-                    // 1.0.9 防卡死保護機制：若等候總時間達 18 秒仍未進入主頁，判定卡死並徹底清除重整
+                    // 防卡死保護機制：若等候總時間達 18 秒仍未進入主頁，判定卡死並徹底清除重整
                     setTimeout(() => {
                         if (isFirstLoad && document.getElementById('login-screen').style.display !== 'none') {
                             window.silentWipe();
