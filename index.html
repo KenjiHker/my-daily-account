@@ -16,7 +16,7 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：版本 1.0.15 (優化漸變消失 + 顏色設定收合版)
+        // 🌟 自動版本檢查機制：版本 1.0.15 (iOS Safari 視窗優化版)
         const APP_VERSION = "1.0.15"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
@@ -27,13 +27,39 @@
                 }
             }
         })();
+
+        // 🌟 v1.0.15 新增：解決 iOS 鍵盤收起與初始化留白問題
+        document.addEventListener('DOMContentLoaded', () => {
+            // 初始化強迫重繪，解決底部工具列算錯的問題
+            setTimeout(() => {
+                document.body.style.height = '99.9svh';
+                setTimeout(() => { document.body.style.height = '100svh'; }, 50);
+            }, 100);
+
+            // 監聽輸入框失去焦點，解決鍵盤收合後的留白
+            document.body.addEventListener('focusout', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                    window.scrollTo(0, Math.max(document.body.scrollHeight, document.documentElement.scrollHeight));
+                }
+            });
+        });
+
+        // 旋轉螢幕重繪
+        window.addEventListener('orientationchange', () => {
+            setTimeout(() => {
+                window.scrollTo(0, 0);
+                document.body.style.height = '99.9svh';
+                setTimeout(() => { document.body.style.height = '100svh'; }, 50);
+            }, 200);
+        });
     </script>
     
     <style>
+        /* v1.0.15 修改：全面將 100dvh 改為 100svh，並確保寬度為 100% 避免溢出 */
         html { 
             background-color: var(--bg-color); 
-            width: 100vw; 
-            height: 100dvh; 
+            width: 100%; 
+            height: 100svh; 
             overflow: hidden; 
             overscroll-behavior: none;
         }
@@ -66,12 +92,12 @@
             flex-direction: column; 
             position: fixed;
             top: 0; left: 0; 
-            width: 100vw; 
-            height: 100dvh; 
+            width: 100%; 
+            height: 100svh; 
             overflow: hidden; 
             overscroll-behavior-y: none;
         }
-
+        
         a, button, .clickable, .history-item, .nav-btn, .cal-day, .emoji-item, .calc-btn, .month-cell-btn { cursor: pointer; }
 
         .google-btn { background-color: #ffffff; color: #757575; border: 1px solid #ddd; border-radius: 24px; padding: 12px 24px; font-size: 16px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; width: 100%; transition: transform 0.2s; }
@@ -100,7 +126,7 @@
         #login-screen {
             position: fixed;
             top: 0; left: 0;
-            width: 100vw; height: 100dvh;
+            width: 100vw; height: 100svh;
             background-color: var(--bg-color);
             z-index: 99999;
             display: flex;
@@ -111,8 +137,6 @@
         }
         .login-title { font-size: 32px; font-weight: 900; color: var(--text-main); margin-bottom: 12px; }
         .login-subtitle { font-size: 16px; font-weight: bold; color: var(--text-sub); margin-bottom: 40px; }
-        
-        .login-version-tag { position: absolute; bottom: max(30px, env(safe-area-inset-bottom)); font-size: 13px; color: var(--text-sub); font-weight: 900; letter-spacing: 1.5px; opacity: 0.7;}
 
         #connection-dot {
             font-size: 14px; font-weight: 800; padding: 12px 16px; border-radius: 12px;
@@ -178,9 +202,9 @@
         .month-cell-btn:active { transform: translateY(4px); box-shadow: 0 0px 0 var(--text-main); }
         .month-cell-btn.active { background: var(--primary-color); color: #ffffff; border-color: var(--text-main); }
 
-        .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: rgba(0,0,0,0.5); z-index: 9998; opacity: 0; pointer-events: none; transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: opacity; }
+        .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100svh; background: rgba(0,0,0,0.5); z-index: 9998; opacity: 0; pointer-events: none; transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: opacity; }
         .sidebar-overlay.active { opacity: 1; pointer-events: auto; }
-        .sidebar { position: fixed; top: 0; left: 0; width: 280px; height: 100dvh; background: var(--card-bg); z-index: 9999; transform: translateX(-100%); transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.5s ease; box-shadow: 0 0 0 rgba(0,0,0,0); display: flex; flex-direction: column; will-change: transform; }
+        .sidebar { position: fixed; top: 0; left: 0; width: 280px; height: 100svh; background: var(--card-bg); z-index: 9999; transform: translateX(-100%); transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.5s ease; box-shadow: 0 0 0 rgba(0,0,0,0); display: flex; flex-direction: column; will-change: transform; }
         .sidebar.active { transform: translateX(0); box-shadow: 4px 0 20px rgba(0,0,0,0.1); }
         .sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: max(20px, env(safe-area-inset-top)) 20px 20px; border-bottom: 1px solid var(--border-color); }
         .sidebar-header h2 { font-size: 20px; font-weight: 800; color: var(--text-main); margin: 0; }
@@ -197,39 +221,13 @@
         .action-cancel-block-btn { flex: 1; height: 50px; background: var(--nav-btn-bg); color: var(--text-main); border: 2.5px solid #222222; border-radius: var(--radius-sub); font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 #222222; }
         [data-theme="dark"] .action-cancel-block-btn { border-color: #ffffff; box-shadow: 0 4px 0 #ffffff; }
 
-        .calendar-sheet { height: 100dvh !important; max-height: 100dvh !important; border-radius: 0 !important; display: flex; flex-direction: column; border-top: none !important; background: var(--bg-color) !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-left: 0 !important; padding-right: 0 !important; padding-bottom: 0 !important; overflow: hidden !important; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1) !important; will-change: transform; }
-        .calendar-sheet .modal-header { padding: 0 20px; margin-bottom: 8px; }
+        /* 🔥 日曆底色更換為首頁底色 🔥 */
+        .calendar-sheet { height: 100svh !important; max-height: 100svh !important; border-radius: 0 !important; display: flex; flex-direction: column; border-top: none !important; background: var(--bg-color) !important; padding-top: max(12px, env(safe-area-inset-top)) !important; padding-bottom: 0 !important; overflow: hidden !important; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1) !important; will-change: transform; }
         
-        #cal-swipe-viewport { position: relative; width: 100vw; flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+        #modal-date-records { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: calc(60px + env(safe-area-inset-bottom)); padding-left: 16px; padding-right: 16px; }
         
-        #cal-swipe-track { position: relative; width: 100%; height: 100%; display: flex; transform: translateZ(0); -webkit-transform: translateZ(0); will-change: transform; }
-        .cal-page, .ghost-page { width: 100vw; flex-shrink: 0; display: flex; flex-direction: column; padding: 0; height: 100%; overflow: hidden; transform: translateZ(0); -webkit-transform: translateZ(0); backface-visibility: hidden; -webkit-backface-visibility: hidden;}
-        
-        .calendar-grid-wrap { 
-            padding: 0 12px 0 12px; 
-            flex-shrink: 0; 
-            position: relative; 
-            z-index: 10; 
-            background: var(--bg-color);
-            border: none;
-            box-shadow: none;
-        }
-        
-        /* 🔥 1.0.15：極致順滑且不遮擋資料的漸變遮罩 🔥 */
-        .modal-date-records-wrap { 
-            flex: 1; 
-            overflow-y: auto; 
-            -webkit-overflow-scrolling: touch; 
-            padding: 10px 20px calc(80px + env(safe-area-inset-bottom)) 20px; 
-            margin-top: 0px; /* 取消負距離拉伸，防止被實體背景遮擋消失 */
-            position: relative;
-            z-index: 5;
-            /* 將漸變範圍設置在頂部的 70px 內，分 4 個階段平滑過渡 */
-            -webkit-mask-image: linear-gradient(to bottom, transparent 0px, rgba(0,0,0,0.05) 15px, rgba(0,0,0,0.3) 35px, rgba(0,0,0,0.7) 55px, black 70px, black 100%);
-            mask-image: linear-gradient(to bottom, transparent 0px, rgba(0,0,0,0.05) 15px, rgba(0,0,0,0.3) 35px, rgba(0,0,0,0.7) 55px, black 70px, black 100%);
-        }
-        
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; gap: 8px; text-align: center; padding: 8px; background: transparent; border: none; box-sizing: border-box; }
+        /* 🔥 日曆美化：計數機按鈕風格 🔥 */
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 12px; gap: 8px; text-align: center; padding: 12px 8px; background: transparent; border: none; box-sizing: border-box; }
         .cal-week-title { font-size: 14px; font-weight: 900; color: var(--text-main); padding: 4px 0; }
         .cal-day { font-size: 16px; font-weight: 900; color: var(--text-main); display: flex; align-items: center; justify-content: center; position: relative; aspect-ratio: 1; margin: 0 auto; width: 100%; max-width: 44px; height: auto; background-color: var(--card-bg); border-radius: 12px; border: 2px solid var(--text-main); box-shadow: 0 3px 0 var(--text-main); transition: transform 0.1s, box-shadow 0.1s; }
         .cal-day:active:not(.blur-day) { transform: translateY(3px); box-shadow: 0 0px 0 var(--text-main); }
@@ -239,7 +237,7 @@
         .cal-day.selected-circle { background-color: var(--text-main) !important; color: var(--card-bg) !important; box-shadow: 0 3px 0 var(--text-sub); }
         .day-dot { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); width: 6px; height: 6px; background-color: #ff5b5b; border-radius: 50%; border: 1.5px solid var(--card-bg); }
 
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: rgba(0,0,0,0.5); z-index: 2000; display: none; align-items: flex-end; transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: opacity; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100svh; background: rgba(0,0,0,0.5); z-index: 2000; display: none; align-items: flex-end; transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: opacity; }
         .modal-overlay.active { display: flex; opacity: 1; }
         .modal-overlay.top-aligned { align-items: flex-start; }
         
@@ -293,7 +291,8 @@
         .handdrawn-font-svg { width: 100%; height: 100%; display: block; }
         .handdrawn-font-svg path { fill: none; stroke: var(--calc-text); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
 
-        .full-screen-modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: var(--bg-color); z-index: 3000; display: none; flex-direction: column; overflow: hidden; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: transform; }
+        /* 🔥 新增修改數據版面：頂部白色更換為首頁底色顏色 🔥 */
+        .full-screen-modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100svh; background: var(--bg-color); z-index: 3000; display: none; flex-direction: column; overflow: hidden; animation: slideUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1); will-change: transform; }
         .full-screen-modal.active { display: flex; }
         .record-header-bar { display: flex; justify-content: space-between; align-items: center; padding: max(12px, env(safe-area-inset-top)) 20px 12px; background: var(--bg-color); border-bottom: none; font-size: 18px; font-weight: bold; color: var(--text-main); z-index: 10; }
         .record-top-content { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; -webkit-overflow-scrolling: touch; padding-bottom: calc(52vh + env(safe-area-inset-bottom)); }
@@ -320,9 +319,6 @@
         #recordModal .calc-keyboard-grid { flex: 1; display: grid; grid-template-rows: repeat(4, minmax(0, 1fr)); grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 0 16px 12px 16px; min-height: 0; }
         #recordModal .calc-btn { height: 100%; min-height: 0; border-radius: 12px; box-shadow: 0 3px 0 var(--text-main); }
         #recordModal .calc-btn:active { transform: translateY(3px); box-shadow: 0 0px 0 var(--text-main); }
-        
-        .cal-ctrl-btn { border: none; outline: none; background: transparent; font-size: 20px; color: var(--text-main); min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; padding: 0; box-shadow: none; -webkit-tap-highlight-color: transparent; }
-        .cal-ctrl-btn:active { opacity: 0.6; }
     </style>
 </head>
 <body>
@@ -338,8 +334,6 @@
         </button>
 
         <p id="login-error-msg" style="color: #ff5b5b; font-size: 14px; font-weight: bold; margin-top: 20px; display: none; text-align: center; white-space: pre-wrap; line-height: 1.5;"></p>
-        
-        <div class="login-version-tag">VERSION 1.0.15</div>
     </div>
 
     <div class="sidebar-overlay" id="settings-overlay" onclick="closeSettings()"></div>
@@ -352,23 +346,6 @@
             <div class="settings-group">
                 <span class="settings-label">外觀設定</span>
                 <button class="settings-action-btn" onclick="toggleTheme()" id="sidebar-theme-btn">☀️ 明亮模式</button>
-            </div>
-
-            <div class="settings-group">
-                <span class="settings-label">圖表設定</span>
-                <button class="settings-action-btn" onclick="document.getElementById('color-settings-box').style.display = document.getElementById('color-settings-box').style.display === 'none' ? 'flex' : 'none'">
-                    🎨 設定圖表顏色
-                </button>
-                <div id="color-settings-box" style="display: none; gap: 10px; margin-top: 8px;">
-                    <div style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; background:var(--nav-btn-bg); padding:10px 0; border-radius:12px; border: 1px solid var(--border-color);">
-                        <input type="color" id="setting-income-color" style="width:30px; height:30px; border:none; cursor:pointer; background:transparent;" onchange="updateChartColors()">
-                        <span style="font-size:14px; font-weight:bold; color:var(--text-main);">收入</span>
-                    </div>
-                    <div style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; background:var(--nav-btn-bg); padding:10px 0; border-radius:12px; border: 1px solid var(--border-color);">
-                        <input type="color" id="setting-expense-color" style="width:30px; height:30px; border:none; cursor:pointer; background:transparent;" onchange="updateChartColors()">
-                        <span style="font-size:14px; font-weight:bold; color:var(--text-main);">支出</span>
-                    </div>
-                </div>
             </div>
 
             <div class="settings-group" style="flex-direction: row; justify-content: space-between; align-items: center; margin-top: 8px;">
@@ -446,25 +423,23 @@
             <div class="modal-header" style="display: flex; align-items: center; justify-content: space-between;">
                 <div style="width: 44px;"></div>
                 <div style="display: flex; align-items: center; justify-content: center; gap: 4px; flex: 1;">
-                    <button class="cal-ctrl-btn" onclick="adjustCalendarMonth(-1)">◀</button>
+                    <button class="cal-ctrl-btn nav-btn" onclick="adjustCalendarMonth(-1)" style="min-width: 44px; padding: 0; background: transparent; font-size: 18px;">◀</button>
                     <span id="cal-month-title" style="font-weight:900; font-size:17px; color:var(--text-main);">加載中...</span>
-                    <button class="cal-ctrl-btn" onclick="adjustCalendarMonth(1)">▶</button>
+                    <button class="cal-ctrl-btn nav-btn" onclick="adjustCalendarMonth(1)" style="min-width: 44px; padding: 0; background: transparent; font-size: 18px;">▶</button>
                 </div>
                 <button class="modal-close" onclick="closeCalendarModal(null)" style="min-width: 44px;">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v9h9"></path><circle cx="12" cy="12" r="3.5" fill="var(--card-bg)" stroke="currentColor"></circle></svg>
                 </button>
             </div>
             
-            <div id="cal-swipe-viewport">
-                <div id="cal-swipe-track">
-                    <div class="cal-page" id="cal-main-page">
-                        <div class="calendar-grid-wrap">
-                            <div class="calendar-grid" id="calendar-grid-container"></div>
-                        </div>
-                        <div class="modal-date-records-wrap" id="modal-date-records"></div>
-                    </div>
+            <div id="cal-swipe-viewport" style="position: relative; width: 100%; overflow: hidden; margin-bottom: 16px; touch-action: pan-y;">
+                <div id="cal-swipe-track" style="position: relative; width: 100%; will-change: transform; display: flex;">
+                    <div class="calendar-grid" id="calendar-grid-container" style="width: 100%; flex-shrink: 0;"></div>
                 </div>
             </div>
+
+            <div style="font-size: 14px; font-weight: 800; margin-bottom: 8px; color:var(--text-main);" id="selected-date-label">📍 選定日期</div>
+            <div id="modal-date-records"></div>
         </div>
     </div>
 
@@ -602,9 +577,6 @@
         
         let recordsRef = null; 
 
-        window.chartIncomeColor = localStorage.getItem('app_chart_income_color') || '#4ab3e3';
-        window.chartExpenseColor = localStorage.getItem('app_chart_expense_color') || '#f7a3b6';
-
         window.showToast = function(msg, duration = 3000) {
             const toast = document.getElementById('toast-container');
             if (!toast) return;
@@ -629,21 +601,15 @@
            }
         });
 
+        // 背景靜默大掃除
         window.silentWipe = function() {
             try {
                 const theme = localStorage.getItem('apple-app-theme');
                 const ver = localStorage.getItem('pwa_app_version');
-                const chartInc = localStorage.getItem('app_chart_income_color');
-                const chartExp = localStorage.getItem('app_chart_expense_color');
-                
                 localStorage.clear();
                 sessionStorage.clear();
-                
                 if(theme) localStorage.setItem('apple-app-theme', theme);
                 if(ver) localStorage.setItem('pwa_app_version', ver);
-                if(chartInc) localStorage.setItem('app_chart_income_color', chartInc);
-                if(chartExp) localStorage.setItem('app_chart_expense_color', chartExp);
-                
                 if (window.indexedDB && window.indexedDB.databases) {
                     window.indexedDB.databases().then(dbs => {
                         dbs.forEach(db => { window.indexedDB.deleteDatabase(db.name); });
@@ -740,6 +706,7 @@
             }
         });
 
+        // 🔥 使用 onValue 即時監聽資料庫 🔥
         function startDatabaseSync(emailKey) {
             if (!recordsRef) return;
             
@@ -801,8 +768,8 @@
 
             setTimeout(() => {
                 if (isFirstLoad && document.getElementById('login-screen').style.display !== 'none') {
-                    window.silentWipe();
-                    window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
+                    errorMsg.innerText = "⏳ 網絡連線較慢，正在努力同步中...";
+                    errorMsg.style.color = "#ffb3b3";
                 }
             }, 8000);
         }
@@ -848,21 +815,10 @@
             setTimeout(function() { window.scrollTo(0, 1); }, 0);
             if (!window.records) window.records = [];
             
-            document.getElementById('setting-income-color').value = window.chartIncomeColor;
-            document.getElementById('setting-expense-color').value = window.chartExpenseColor;
-            
             document.getElementById('current-display-month-label').innerText = `${currentSelectedYear}年 ${currentSelectedMonth + 1}月`;
             document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
             syncHeaderDisplay();
         });
-        
-        window.updateChartColors = function() {
-            window.chartIncomeColor = document.getElementById('setting-income-color').value;
-            window.chartExpenseColor = document.getElementById('setting-expense-color').value;
-            localStorage.setItem('app_chart_income_color', window.chartIncomeColor);
-            localStorage.setItem('app_chart_expense_color', window.chartExpenseColor);
-            updateDashboard(true); 
-        };
         
         function openSettings() {
             document.getElementById('settings-sidebar').classList.add('active');
@@ -985,8 +941,8 @@
                 ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
             };
 
-            if (expense > 0) drawSegment(expStart, expEnd, window.chartExpenseColor);
-            if (income > 0) drawSegment(incStart, incEnd, window.chartIncomeColor); 
+            if (expense > 0) drawSegment(expStart, expEnd, '#f7a3b6');
+            if (income > 0) drawSegment(incStart, incEnd, '#4ab3e3'); 
         }
 
         function createGhostChart(y, m, mode, isPrev) {
@@ -1022,6 +978,7 @@
                     const _now = new Date();
                     const isCurrentMonth = (currentSelectedYear === _now.getFullYear() && currentSelectedMonth === _now.getMonth());
 
+                    // Ghost Left (Swipe Right / prev)
                     if (viewMode === 'all') {
                         swipeTarget.appendChild(createGhostChart(_now.getFullYear(), _now.getMonth(), 'month', true));
                     } else {
@@ -1030,6 +987,7 @@
                         swipeTarget.appendChild(createGhostChart(pY, pM, 'month', true));
                     }
 
+                    // Ghost Right (Swipe Left / next)
                     if (viewMode !== 'all') {
                         if (isCurrentMonth) {
                             swipeTarget.appendChild(createGhostChart(null, null, 'all', false));
@@ -1041,7 +999,7 @@
                     }
                 }
                 
-                if (viewMode === 'all' && deltaX < 0) deltaX = 0; 
+                if (viewMode === 'all' && deltaX < 0) deltaX = 0; // 防止在總資產時繼續向左滑
                 swipeTarget.style.transform = `translateX(${deltaX}px)`;
             }, {passive: true});
 
@@ -1066,14 +1024,14 @@
                 if (direction === 1) { // 向左滑
                     if (viewMode === 'all') return;
                     if (isCurrentMonth) {
-                        viewMode = 'all'; 
+                        viewMode = 'all'; // 當前月向左滑 -> 總結餘
                     } else {
                         currentSelectedMonth++; 
                         if (currentSelectedMonth > 11) { currentSelectedMonth = 0; currentSelectedYear++; }
                     }
                 } else if (direction === -1) { // 向右滑
                     if (viewMode === 'all') {
-                        viewMode = 'month'; 
+                        viewMode = 'month'; // 總結餘向右滑 -> 當前月
                         currentSelectedYear = _now.getFullYear();
                         currentSelectedMonth = _now.getMonth();
                     } else {
@@ -1095,151 +1053,63 @@
             }
         }
 
-        function generateGroupedRecordsHTML(targetRecords) {
-            if (targetRecords.length === 0) return ''; 
-            let html = '';
-            const groupedRecords = {}; 
-            targetRecords.forEach(r => { if (!groupedRecords[r.date]) groupedRecords[r.date] = []; groupedRecords[r.date].push(r); });
-
-            Object.keys(groupedRecords).sort((a, b) => new Date(b) - new Date(a)).forEach(dateStr => {
-                const dayRecords = groupedRecords[dateStr]; 
-                const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']; 
-                const dayOfWeekStr = weekDays[new Date(dateStr).getDay()];
-                
-                let daySum = 0; dayRecords.forEach(dr => { daySum += dr.amount; });
-                
-                html += `<div class="date-group"><div class="date-header"><span>${dateStr.replace(/-/g, '/')} ${dayOfWeekStr}</span><span class="date-summary-total">$${daySum.toLocaleString()}</span></div>`;
-
-                dayRecords.forEach(item => {
-                    const icon = item.category.split(' ')[0] || '📝'; 
-                    const name = item.category.substring(icon.length).trim() || item.category;
-                    html += `
-                        <div class="history-item" onclick="openRecordModal(${item.id})">
-                            <div class="item-left">
-                                <div class="item-icon">${icon}</div>
-                                <div class="item-info">
-                                    <span class="item-category">${name}</span>
-                                    ${item.diary ? `<span class="item-diary">${item.diary}</span>` : ''}
-                                </div>
-                            </div>
-                            <div class="item-right-action-wrapper">
-                                <div class="item-amount-box">
-                                    <span class="item-amount" style="color: ${item.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)'}">${item.type === 'income' ? '+' : '-'}$${item.amount.toLocaleString()}</span>
-                                </div>
-                                <button class="list-action-delete-btn" onclick="event.stopPropagation(); openDeleteModal(${item.id})">刪除</button>
-                            </div>
-                        </div>`;
-                });
-                html += `</div>`;
-            });
-            return html;
-        }
-
-        function createGhostPage(y, m, isPrev) {
-            const ghost = document.createElement('div');
-            ghost.className = 'cal-page ghost-page';
-            ghost.style.position = 'absolute'; 
-            ghost.style.top = '0'; 
-            ghost.style.left = isPrev ? '-100vw' : '100vw';
-            
-            const gridWrap = document.createElement('div');
-            gridWrap.className = 'calendar-grid-wrap';
-            
-            const grid = document.createElement('div');
-            grid.className = 'calendar-grid';
-            grid.innerHTML = generateCalendarHTML(y, m);
-            gridWrap.appendChild(grid);
-            
-            const recordsContainer = document.createElement('div');
-            recordsContainer.className = 'modal-date-records-wrap';
-            
-            const prefix = `${y}-${(m + 1).toString().padStart(2, '0')}`;
-            const targetRecords = records.filter(r => r.date.startsWith(prefix)).sort((a, b) => {
-                if (a.date !== b.date) return new Date(b.date) - new Date(a.date);
-                return b.id - a.id;
-            });
-            recordsContainer.innerHTML = generateGroupedRecordsHTML(targetRecords);
-
-            ghost.appendChild(gridWrap);
-            ghost.appendChild(recordsContainer);
-            return ghost;
-        }
-
         function initCalendarSwipe() {
             const swipeArea = document.getElementById('cal-swipe-viewport');
             const swipeTarget = document.getElementById('cal-swipe-track');
             let touchStartX = 0; let currentTouchX = 0; let isSwiping = false; let hasAddedGhosts = false;
 
-            swipeArea.addEventListener('touchstart', function(e) {
+            swipeArea.addEventListener('touchstart', (e) => {
                 if (e.touches.length > 1) return;
-                touchStartX = e.touches[0].clientX; currentTouchX = touchStartX; 
-                this.touchStartY = e.touches[0].clientY;
-                this.isScrolling = undefined;
-                isSwiping = true; hasAddedGhosts = false;
+                touchStartX = e.touches[0].clientX; currentTouchX = touchStartX; isSwiping = true; hasAddedGhosts = false;
                 swipeTarget.style.transition = 'none';
-                document.querySelectorAll('.ghost-page').forEach(el => el.remove());
+                document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
             }, {passive: true});
 
-            swipeArea.addEventListener('touchmove', function(e) {
+            swipeArea.addEventListener('touchmove', (e) => {
                 if (!isSwiping) return;
-                currentTouchX = e.touches[0].clientX; 
-                let currentTouchY = e.touches[0].clientY;
-                let deltaX = currentTouchX - touchStartX;
-                let deltaY = currentTouchY - this.touchStartY;
-
-                if (typeof this.isScrolling === 'undefined') {
-                    this.isScrolling = Math.abs(deltaY) > Math.abs(deltaX);
-                }
-                if (this.isScrolling) return; 
-
+                currentTouchX = e.touches[0].clientX; let deltaX = currentTouchX - touchStartX;
+                
                 if (!hasAddedGhosts && Math.abs(deltaX) > 5) {
                     hasAddedGhosts = true;
                     let pY = displayYear; let pM = displayMonth - 1; if (pM < 0) { pM = 11; pY--; }
-                    swipeTarget.appendChild(createGhostPage(pY, pM, true));
+                    swipeTarget.appendChild(createGhostCal(pY, pM, true));
                     let nY = displayYear; let nM = displayMonth + 1; if (nM > 11) { nM = 0; nY++; }
-                    swipeTarget.appendChild(createGhostPage(nY, nM, false));
+                    swipeTarget.appendChild(createGhostCal(nY, nM, false));
                 }
                 swipeTarget.style.transform = `translateX(${deltaX}px)`;
             }, {passive: true});
 
-            swipeArea.addEventListener('touchend', function(e) {
-                if (!isSwiping || this.isScrolling) return;
-                isSwiping = false; let deltaX = currentTouchX - touchStartX; const threshold = window.innerWidth * 0.2;
+            swipeArea.addEventListener('touchend', (e) => {
+                if (!isSwiping) return;
+                isSwiping = false; let deltaX = currentTouchX - touchStartX; const threshold = swipeArea.offsetWidth * 0.2;
                 let direction = 0;
                 if (deltaX > threshold) { direction = -1; } else if (deltaX < -threshold) { direction = 1; }
                 
                 if (direction !== 0) {
-                    let nextM = displayMonth + direction;
-                    let nextY = displayYear;
-                    if (nextM < 0) { nextM = 11; nextY--; }
-                    else if (nextM > 11) { nextM = 0; nextY++; }
-                    document.getElementById('cal-month-title').innerText = `${nextY}年 ${(nextM + 1).toString().padStart(2, '0')}月`;
-
-                    let targetTransformX = direction === 1 ? -window.innerWidth : window.innerWidth;
-                    swipeTarget.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                    let targetTransformX = direction === 1 ? -(swipeArea.offsetWidth + 20) : (swipeArea.offsetWidth + 20);
+                    swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)';
                     swipeTarget.style.transform = `translateX(${targetTransformX}px)`;
-                    
                     setTimeout(() => {
-                        displayMonth = nextM;
-                        displayYear = nextY;
-                        showMonthRecords = true;
-
-                        renderGridCalendar(true); 
-                        renderModalDateRecords();
-
-                        void swipeTarget.offsetHeight; 
-
                         swipeTarget.style.transition = 'none';
                         swipeTarget.style.transform = `translateX(0)`;
-                        
-                        document.querySelectorAll('.ghost-page').forEach(el => el.remove());
-                    }, 400);
+                        document.querySelectorAll('.ghost-cal').forEach(el => el.remove());
+                        adjustCalendarMonth(direction);
+                    }, 500);
                 } else {
-                    swipeTarget.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                    swipeTarget.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)';
                     swipeTarget.style.transform = `translateX(0)`;
-                    setTimeout(() => { document.querySelectorAll('.ghost-page').forEach(el => el.remove()); }, 400);
+                    setTimeout(() => { document.querySelectorAll('.ghost-cal').forEach(el => el.remove()); }, 500);
                 }
             });
+        }
+
+        function createGhostCal(y, m, isPrev) {
+            const ghost = document.createElement('div');
+            ghost.className = 'calendar-grid ghost-cal';
+            ghost.style.position = 'absolute'; ghost.style.top = '0'; ghost.style.width = '100%';
+            ghost.style.left = isPrev ? 'calc(-100% - 20px)' : 'calc(100% + 20px)';
+            ghost.innerHTML = generateCalendarHTML(y, m);
+            return ghost;
         }
 
         function updateDashboard(isSwipe = false) {
@@ -1302,9 +1172,8 @@
                 ctx.save(); ctx.shadowColor = 'rgba(0, 0, 0, 0.08)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 6; ctx.fillStyle = faceColor; ctx.fill(); ctx.restore();
                 ctx.lineWidth = 6; ctx.strokeStyle = strokeStyleColor; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
             };
-            
-            if (expense > 0) drawSegment(expStart, expEnd, window.chartExpenseColor);
-            if (income > 0) drawSegment(incStart, incEnd, window.chartIncomeColor); 
+            if (expense > 0) drawSegment(expStart, expEnd, '#f7a3b6');
+            if (income > 0) drawSegment(incStart, incEnd, '#4ab3e3'); 
         }
 
         function initCoinLoop() {
@@ -1375,11 +1244,6 @@
                 if (window.saveData) window.saveData(records);
                 closeDeleteModal(); closeRecordModal();
                 syncHeaderDisplay();
-                
-                if (document.getElementById('calendarModal').classList.contains('active')) {
-                    renderGridCalendar();
-                    renderModalDateRecords();
-                }
             }
         }
 
@@ -1433,24 +1297,28 @@
             return `<div class="${cls}" data-date="${cellDateStr}">${day}${dot}</div>`;
         }
 
-        function renderGridCalendar(skipTitleUpdate = false) {
-            if (!skipTitleUpdate) {
-                document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
-            }
+        function renderGridCalendar() {
+            document.getElementById('cal-month-title').innerText = `${displayYear}年 ${(displayMonth + 1).toString().padStart(2, '0')}月`;
             const gridContainer = document.getElementById('calendar-grid-container');
-            if (gridContainer) gridContainer.innerHTML = generateCalendarHTML(displayYear, displayMonth);
+            gridContainer.innerHTML = generateCalendarHTML(displayYear, displayMonth);
         }
 
         function renderModalDateRecords() {
-            const container = document.getElementById('modal-date-records'); 
-            if (!container) return;
+            const container = document.getElementById('modal-date-records'); container.innerHTML = '';
             
             let targetRecords = [];
             if (showMonthRecords) {
+                document.getElementById('selected-date-label').innerText = `📍 ${displayYear}年${displayMonth + 1}月 明細`;
                 const prefix = `${displayYear}-${(displayMonth + 1).toString().padStart(2, '0')}`;
                 targetRecords = records.filter(r => r.date.startsWith(prefix));
             } else {
+                document.getElementById('selected-date-label').innerText = `📍 選定日期：${selectedDateStr}`;
                 targetRecords = records.filter(r => r.date === selectedDateStr);
+            }
+
+            if (targetRecords.length === 0) { 
+                container.innerHTML = `<div style="text-align:center; padding:18px; font-size:13px; color:#bbb;">📍 該${showMonthRecords ? '月份' : '日'}尚無收支明細</div>`; 
+                return; 
             }
 
             targetRecords.sort((a, b) => {
@@ -1458,7 +1326,33 @@
                 return b.id - a.id;
             });
 
-            container.innerHTML = generateGroupedRecordsHTML(targetRecords);
+            targetRecords.forEach(item => {
+                const itemDiv = document.createElement('div'); itemDiv.className = 'history-item'; itemDiv.style.cssText = 'border: 1.5px solid #222; border-radius:12px; margin-bottom:8px; box-shadow:0 3px 0 #222;';
+                itemDiv.onclick = () => openRecordModal(item.id);
+                const icon = item.category.split(' ')[0] || '📝'; const name = item.category.substring(icon.length).trim() || item.category;
+                
+                const dateLabel = showMonthRecords ? `<span style="font-size:11px; color:var(--text-sub); margin-left:6px; background:var(--nav-btn-bg); padding:2px 6px; border-radius:6px;">${item.date.split('-').slice(1).join('/')}</span>` : '';
+
+                itemDiv.innerHTML = `
+                    <div class="item-left">
+                        <div class="item-icon" style="width:30px; height:30px; font-size:14px;">${icon}</div>
+                        <div class="item-info">
+                            <div style="display:flex; align-items:center;">
+                                <span class="item-category" style="font-size:13px;">${name}</span>
+                                ${dateLabel}
+                            </div>
+                            ${item.diary ? `<span class="item-diary" style="font-size:11px; color:var(--text-sub); margin-top:2px;">${item.diary}</span>` : ''}
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-weight:bold; font-size:14px; color:${item.type==='income'?'var(--income-color)':'var(--expense-color)'}">
+                            ${item.type==='income'?'+':'-'}$${item.amount.toLocaleString()}
+                        </span>
+                        <button class="list-action-delete-btn" style="min-height:28px; padding:4px 8px;" onclick="event.stopPropagation(); openDeleteModal(${item.id})">刪除</button>
+                    </div>
+                `;
+                container.appendChild(itemDiv);
+            });
         }
 
         function executeAdd(amount, category, date, diary, forcedType) {
@@ -1470,11 +1364,6 @@
             const recordDate = new Date(date); currentSelectedYear = recordDate.getFullYear(); currentSelectedMonth = recordDate.getMonth();
             viewMode = 'month';
             syncHeaderDisplay();
-            
-            if (document.getElementById('calendarModal').classList.contains('active')) {
-                renderGridCalendar();
-                renderModalDateRecords();
-            }
         }
 
         function openMonthModal() { document.getElementById('monthModal').classList.add('active'); renderMonthButtonsGrid(); }
@@ -1707,11 +1596,6 @@
                         if (window.saveData) window.saveData(records);
                         currentSelectedYear = year; currentSelectedMonth = recordState.date.getMonth(); viewMode = 'month';
                         syncHeaderDisplay();
-                        
-                        if (document.getElementById('calendarModal').classList.contains('active')) {
-                            renderGridCalendar();
-                            renderModalDateRecords();
-                        }
                     }
                 }
                 closeRecordModal();
@@ -1731,7 +1615,25 @@
                 listContainer.innerHTML = `<div class="empty-state-wrapper"><div class="empty-text-main">沒有記錄</div><div class="empty-text-sub" style="font-size:13px; color:#aaa; margin-top:2px;">點擊 ＋ 號新增一筆</div></div>`; return;
             }
 
-            listContainer.innerHTML = generateGroupedRecordsHTML(filteredRecords);
+            const groupedRecords = {}; filteredRecords.forEach(r => { if (!groupedRecords[r.date]) groupedRecords[r.date] = []; groupedRecords[r.date].push(r); });
+
+            Object.keys(groupedRecords).sort((a, b) => new Date(b) - new Date(a)).forEach(dateStr => {
+                const dayRecords = groupedRecords[dateStr]; const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']; const dayOfWeekStr = weekDays[new Date(dateStr).getDay()];
+                const dateGroupDiv = document.createElement('div'); dateGroupDiv.className = 'date-group';
+                let daySum = 0; dayRecords.forEach(dr => { daySum += dr.amount; });
+                const headerDiv = document.createElement('div'); headerDiv.className = 'date-header'; headerDiv.innerHTML = `<span>${dateStr.replace(/-/g, '/')} ${dayOfWeekStr}</span><span class="date-summary-total">$${daySum.toLocaleString()}</span>`; dateGroupDiv.appendChild(headerDiv);
+
+                dayRecords.forEach(item => {
+                    const itemDiv = document.createElement('div'); itemDiv.className = 'history-item'; itemDiv.onclick = () => openRecordModal(item.id);
+                    const icon = item.category.split(' ')[0] || '📝'; const name = item.category.substring(icon.length).trim() || item.category;
+                    itemDiv.innerHTML = `
+                        <div class="item-left"><div class="item-icon">${icon}</div><div class="item-info"><span class="item-category">${name}</span>${item.diary ? `<span class="item-diary">${item.diary}</span>` : ''}</div></div>
+                        <div class="item-right-action-wrapper"><div class="item-amount-box"><span class="item-amount" style="color: ${item.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)'}">${item.type === 'income' ? '+' : '-'}$${item.amount.toLocaleString()}</span></div><button class="list-action-delete-btn" onclick="event.stopPropagation(); openDeleteModal(${item.id})">刪除</button></div>
+                    `;
+                    dateGroupDiv.appendChild(itemDiv);
+                });
+                listContainer.appendChild(dateGroupDiv);
+            });
         }
     </script>
 </body>
