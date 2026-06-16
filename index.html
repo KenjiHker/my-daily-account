@@ -16,8 +16,8 @@
     <meta name="theme-color" content="#FFD700" id="theme-color-meta">
 
     <script>
-        // 🌟 自動版本檢查機制：版本 1.0.8 (完美適配 iOS 底部版 + 日曆漸變特效)
-        const APP_VERSION = "1.0.8"; 
+        // 🌟 自動版本檢查機制：版本 1.0.9 (新增防卡死與未登入自動清除機制)
+        const APP_VERSION = "1.0.9"; 
         (function checkVersion() {
             const savedVersion = localStorage.getItem('pwa_app_version');
             if (savedVersion !== APP_VERSION) {
@@ -30,7 +30,7 @@
     </script>
     
     <style>
-        /* 🔥 1.0.8：還原 1.0.0 完美的滿版設定，解決 PWA 底部留白 🔥 */
+        /* 🔥 1.0.8 完美滿版設定保留 🔥 */
         html { 
             background-color: var(--bg-color); 
             width: 100vw; 
@@ -58,7 +58,6 @@
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; transition: background-color 0.5s, border-color 0.5s, color 0.5s; }
         
-        /* 🔥 1.0.8：還原 1.0.0 完美的 fixed 滿版設定 🔥 */
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
             background-color: var(--bg-color); 
@@ -207,7 +206,7 @@
         #cal-swipe-track { position: relative; width: 100%; height: 100%; display: flex; transform: translateZ(0); -webkit-transform: translateZ(0); will-change: transform; }
         .cal-page, .ghost-page { width: 100vw; flex-shrink: 0; display: flex; flex-direction: column; padding: 0; height: 100%; overflow: hidden; transform: translateZ(0); -webkit-transform: translateZ(0); backface-visibility: hidden; -webkit-backface-visibility: hidden;}
         
-        /* 🔥 1.0.8 完美保留：無框線、無陰影的乾淨日曆底部 🔥 */
+        /* 🔥 完美保留：無框線、無陰影的乾淨日曆底部 🔥 */
         .calendar-grid-wrap { 
             padding: 0 12px 0 12px; 
             flex-shrink: 0; 
@@ -218,7 +217,7 @@
             box-shadow: none;
         }
         
-        /* 🔥 1.0.8 完美保留：數據區塊與日曆重疊並擁有高級漸變消失特效 🔥 */
+        /* 🔥 完美保留：數據區塊與日曆重疊並擁有高級漸變消失特效 🔥 */
         .modal-date-records-wrap { 
             flex: 1; 
             overflow-y: auto; 
@@ -716,6 +715,7 @@
             }
         });
 
+        // 包含防卡死自動清除重整的同步機制
         function startDatabaseSync(emailKey) {
             if (!recordsRef) return;
             
@@ -779,6 +779,14 @@
                 if (isFirstLoad && document.getElementById('login-screen').style.display !== 'none') {
                     errorMsg.innerText = "⏳ 網絡連線較慢，正在努力同步中...";
                     errorMsg.style.color = "#ffb3b3";
+                    
+                    // 1.0.9 防卡死保護機制：若等候總時間達 18 秒仍未進入主頁，判定卡死並徹底清除重整
+                    setTimeout(() => {
+                        if (isFirstLoad && document.getElementById('login-screen').style.display !== 'none') {
+                            window.silentWipe();
+                            window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
+                        }
+                    }, 10000);
                 }
             }, 8000);
         }
